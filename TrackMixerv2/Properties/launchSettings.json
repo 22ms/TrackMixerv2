@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TrackMixerv2 (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "TrackMixerv2 (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

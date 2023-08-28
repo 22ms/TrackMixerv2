@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="TrackMixerv2.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TrackMixerv2"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    >
+
+    <!-- Custom title bar -->
+    <TabView x:Name="TabView" Loaded="TabView_Loaded" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AddTabButtonClick="TabView_AddTabButtonClick" TabCloseRequested="TabView_TabCloseRequested" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" TabWidthMode="Equal">
+        <TabViewItem Header="Select a clip">
+            <TabViewItem.IconSource>
+                <SymbolIconSource Symbol="NewWindow" />
+            </TabViewItem.IconSource>
+            <local:MixerPage/>
+        </TabViewItem>
+
+        <TabView.TabStripHeader>
+            <Grid x:Name="ShellTitlebarInset" Background="Transparent" />
+        </TabView.TabStripHeader>
+        <TabView.TabStripFooter>
+            <Grid x:Name="CustomDragRegion" Background="Transparent" MinWidth="120" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border CornerRadius="10, 0, 0, 0" Grid.Column="1">
+                    <Rectangle Width="40" Fill="{ThemeResource LayerOnMicaBaseAltFillColorTertiary}" HorizontalAlignment="Right"/>
+                </Border>
+                <Image Grid.Column="1"  Width="30" Source="C:\Users\Leand\source\repos\TrackMixerv2\TrackMixerv2\Assets\Square44x44Logo.scale-400.png" HorizontalAlignment="Right"></Image>
+                <Rectangle Grid.Column="2" Width="120" Fill="{ThemeResource LayerOnMicaBaseAltFillColorTertiary}" HorizontalAlignment="Right"/>
+            </Grid>
+        </TabView.TabStripFooter>
+    </TabView>
+</Window>
