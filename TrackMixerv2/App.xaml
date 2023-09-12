@@ -20,6 +20,9 @@
             <SolidColorBrush x:Key="WindowCaptionForeground">White</SolidColorBrush>
             <SolidColorBrush x:Key="WindowCaptionForegroundDisabled" Color="{ThemeResource SystemAltHighColor}"/>
             <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="{ThemeResource LayerOnMicaBaseAltFillColorTertiary}"/>
+            <Style TargetType="MediaTransportControls" x:Key="myTransportControlsStyle">
+                
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

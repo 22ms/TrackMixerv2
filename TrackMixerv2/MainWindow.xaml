@@ -17,7 +17,6 @@
             </TabViewItem.IconSource>
             <local:MixerPage/>
         </TabViewItem>
-
         <TabView.TabStripHeader>
             <Grid x:Name="ShellTitlebarInset" Background="Transparent" />
         </TabView.TabStripHeader>
