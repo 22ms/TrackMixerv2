@@ -7,9 +7,10 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
+    HighContrastAdjustment="Auto"
     >
 
-    <Grid Background="{ThemeResource LayerOnMicaBaseAltFillColorTertiary}" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+    <Grid VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Background="{ThemeResource LayerFillColorDefault}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -17,11 +18,11 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
+        <!--<Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
+        </Grid.ColumnDefinitions>-->
         <MenuBar Grid.Row="0" Grid.Column="0">
             <MenuBarItem Title="File">
                 <MenuFlyoutItem Text="Open..."/>
@@ -30,11 +31,13 @@
                 <MenuFlyoutItem Text="Preferences"/>
             </MenuBarItem>
         </MenuBar>
-        <TextBlock x:Name="VideoTitle" Grid.Column="1" Text="No clip selected" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center" TextAlignment="Center" Grid.Row="1"/>
+        <Border BorderThickness="0, 1, 0, 0" BorderBrush="{ThemeResource DividerStrokeColorDefault}" Grid.Column="1" Grid.Row="1" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+            <TextBlock Margin="0, 10, 0, 10" x:Name="VideoTitle" Text="No clip selected" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center" TextAlignment="Center"/>
+        </Border>
         <Border Grid.Column="1" Grid.Row="2">
             <local:MixedMediaPlayer x:Name="MixedMediaPlayer"/>
         </Border>
-        <Grid Grid.Column="1" Grid.Row="3" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" Padding="20, 20, 20, 20">
+        <Grid BorderThickness="0, 1, 0, 0" BorderBrush="{ThemeResource DividerStrokeColorDefault}" Grid.Column="1" Grid.Row="3" Padding="20, 20, 20, 20" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -44,12 +47,10 @@
             </Grid.RowDefinitions>
 
             <Grid Grid.Column="0" x:Name="VolumeControlGrid">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Slider Grid.Column="0" Width="100" Orientation="Vertical" Height="100" TickFrequency="10" TickPlacement="Outside" Maximum="100" Minimum="0"/>
-                <Slider Grid.Column="1" Width="100" Orientation="Vertical" Height="100" TickFrequency="10" TickPlacement="Outside" Maximum="100" Minimum="0"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
             </Grid>
             <Grid Grid.Column="1">
                 <Grid.ColumnDefinitions>

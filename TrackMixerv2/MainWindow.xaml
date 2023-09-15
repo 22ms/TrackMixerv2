@@ -9,19 +9,23 @@
     mc:Ignorable="d"
     >
 
+    <Window.SystemBackdrop>
+        <MicaBackdrop Kind="BaseAlt"/>
+    </Window.SystemBackdrop>
+
     <!-- Custom title bar -->
-    <TabView x:Name="TabView" Loaded="TabView_Loaded" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AddTabButtonClick="TabView_AddTabButtonClick" TabCloseRequested="TabView_TabCloseRequested" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" TabWidthMode="Equal">
-        <TabViewItem Header="Select a clip">
+    <TabView Canvas.ZIndex="1" x:Name="TabView" Loaded="TabView_Loaded" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AddTabButtonClick="TabView_AddTabButtonClick" TabCloseRequested="TabView_TabCloseRequested" TabWidthMode="Equal">
+        <TabViewItem Header="Select a clip" Background="{ThemeResource LayerFillColorDefault}">
             <TabViewItem.IconSource>
                 <SymbolIconSource Symbol="NewWindow" />
             </TabViewItem.IconSource>
             <local:MixerPage/>
         </TabViewItem>
         <TabView.TabStripHeader>
-            <Grid x:Name="ShellTitlebarInset" Background="Transparent" />
+            <Grid x:Name="ShellTitlebarInset" />
         </TabView.TabStripHeader>
         <TabView.TabStripFooter>
-            <Grid x:Name="CustomDragRegion" Background="Transparent" MinWidth="120" HorizontalAlignment="Stretch"></Grid>
+            <Grid x:Name="CustomDragRegion" MinWidth="120" HorizontalAlignment="Stretch"></Grid>
         </TabView.TabStripFooter>
     </TabView>
 </Window>

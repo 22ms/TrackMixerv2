@@ -46,8 +46,7 @@ namespace TrackMixerv2
             newTab.Header = "Initial";
 
             // The Content of a TabViewItem is often a frame which hosts a page.
-            newTab.Content = new MixerPage();
-
+            newTab.Content = new MixerPage(newTab);
             sender.TabItems.Add(newTab);
         }
 

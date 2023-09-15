@@ -7,18 +7,25 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    >
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Page.Resources>
 
     <Grid>
-        <MediaPlayerElement x:Name="MainMediaPlayer" x:FieldModifier="private"
+        <MediaPlayerElement x:Name="MainMediaPlayer" Style="{StaticResource myMediaPlayerElement}" x:FieldModifier="private"
         AutoPlay="False"
         AreTransportControlsEnabled="True"
         Stretch="Uniform"
-        Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}"
         >
-            <!--<MediaPlayerElement.TransportControls>
+            <MediaPlayerElement.TransportControls>
                 <MediaTransportControls Style="{StaticResource myTransportControlsStyle}"/>
-            </MediaPlayerElement.TransportControls>-->
+            </MediaPlayerElement.TransportControls>
         </MediaPlayerElement>
     </Grid>
 </Page>

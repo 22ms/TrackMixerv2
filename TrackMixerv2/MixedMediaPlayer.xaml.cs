@@ -14,10 +14,10 @@ namespace TrackMixerv2
     {
         public class MediaLoadedEventArgs : EventArgs
         {
-            public int AudioTrackCount { get; set; }
-            public MediaLoadedEventArgs(int audioTrackCount)
+            public List<MediaPlayer> TrackPlayers { get; set; }
+            public MediaLoadedEventArgs(List<MediaPlayer> trackPlayers)
             {
-                AudioTrackCount = audioTrackCount;
+                TrackPlayers = trackPlayers;
             }
         }
 
@@ -51,9 +51,14 @@ namespace TrackMixerv2
                     {
                         (mediaPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
                         TrackPlayers.Add(mediaPlayer);
-                        if(currentIndex >= loadedMedia.AudioTracks.Count)
+                        if (currentIndex >= loadedMedia.AudioTracks.Count-1)
                         {
-                            MediaLoaded.Invoke(this, new MediaLoadedEventArgs(loadedMedia.AudioTracks.Count));
+                            dispatcherQueue.TryEnqueue(() => {
+                                List<MediaPlayer> list = new List<MediaPlayer>();
+                                list.Add(MainMediaPlayer.MediaPlayer);
+                                list.AddRange(TrackPlayers);
+                                MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list));
+                            });
                         }
                     };
                 }
@@ -85,15 +90,13 @@ namespace TrackMixerv2
 
         public void SetVolume(int trackIndex, double volume)
         {
-            Debug.WriteLine(trackIndex);
-            Debug.WriteLine(volume);
-            return;
+            volume = volume / 100;
             if(trackIndex == 0)
             {
                 MainMediaPlayer.MediaPlayer.Volume = volume;
                 return;
             }
-            TrackPlayers[trackIndex].Volume = volume;
+            TrackPlayers[trackIndex-1].Volume = volume;
         }
 
         public void PlayAll()
