@@ -12,20 +12,30 @@
     <Window.SystemBackdrop>
         <MicaBackdrop Kind="BaseAlt"/>
     </Window.SystemBackdrop>
-
+    
     <!-- Custom title bar -->
-    <TabView Canvas.ZIndex="1" x:Name="TabView" Loaded="TabView_Loaded" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" AddTabButtonClick="TabView_AddTabButtonClick" TabCloseRequested="TabView_TabCloseRequested" TabWidthMode="Equal">
-        <TabViewItem Header="Select a clip" Background="{ThemeResource LayerFillColorDefault}">
-            <TabViewItem.IconSource>
-                <SymbolIconSource Symbol="NewWindow" />
-            </TabViewItem.IconSource>
-            <local:MixerPage/>
-        </TabViewItem>
+    <TabView x:Name="TabView" Loaded="TabView_Loaded" x:FieldModifier="public">
+
+        <TabView.Resources>
+            <ResourceDictionary>
+                <ResourceDictionary.MergedDictionaries>
+                    <ResourceDictionary Source="Styles.xaml"/>
+                </ResourceDictionary.MergedDictionaries>
+            </ResourceDictionary>
+        </TabView.Resources>
+
         <TabView.TabStripHeader>
-            <Grid x:Name="ShellTitlebarInset" />
+            <Grid x:Name="ShellTitlebarInset"/>
         </TabView.TabStripHeader>
         <TabView.TabStripFooter>
-            <Grid x:Name="CustomDragRegion" MinWidth="120" HorizontalAlignment="Stretch"></Grid>
+            <Grid Background="Transparent" x:Name="CustomDragRegion" MinWidth="188"/>
         </TabView.TabStripFooter>
+
+        <TabView.KeyboardAccelerators>
+            <KeyboardAccelerator Key="T" Modifiers="Control" Invoked="NewTabInvoked" />
+            <KeyboardAccelerator Key="W" Modifiers="Control" Invoked="CloseTabInvoked" />
+            <KeyboardAccelerator Key="PageUp" Modifiers="Control" Invoked="NextTabInvoked" />
+            <KeyboardAccelerator Key="PageDown" Modifiers="Control" Invoked="PreviousTabInvoked" />
+        </TabView.KeyboardAccelerators>
     </TabView>
 </Window>
