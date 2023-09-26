@@ -92,7 +92,6 @@ namespace TrackMixerv2
         public static string IsInRatings (PlaylistConfig playlistConfig, string currentFile) // NULL MEANS YES!
         {
             if (currentFile == null || playlistConfig == null) return null;
-            if(MainWindow.TRACK_METADATA.ContainsKey(currentFile)) { }
             string rootFolder = playlistConfig.SubfolderOnly ? Path.GetDirectoryName(currentFile) : MainWindow.RootFoldersContainFile(currentFile);
             DateTime afterThis = DateTime.Now.Subtract(playlistConfig.TimeSpan);
             List<string> sortedVideoFiles = MainWindow.TRACK_METADATA
@@ -103,6 +102,7 @@ namespace TrackMixerv2
             if (sortedVideoFiles.Count <= 0) return null;
             int currentIndex = sortedVideoFiles.IndexOf(currentFile);
             if(currentIndex  != -1) return null;
+            if (MainWindow.TRACK_METADATA.ContainsKey(currentFile) && MainWindow.TRACK_METADATA[currentFile].Rating > 0) return null; // added check for rating 0
             return sortedVideoFiles[0];
         }
 
