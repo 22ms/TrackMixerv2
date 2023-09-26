@@ -22,7 +22,6 @@ namespace TrackMixerv2
 {
     public sealed partial class MixedMediaPlayer : Page
     {
-
         public class MediaLoadedEventArgs : EventArgs
         {
             public List<MediaPlayer> TrackPlayers { get; set; }
@@ -35,6 +34,8 @@ namespace TrackMixerv2
         }
 
         private List<MediaPlayer> TrackPlayers = new List<MediaPlayer>();
+        private List<bool> MediaOpened = new List<bool>();
+
         private TypedEventHandler<MediaPlayer, object> TrackOpenedHandler;
         private TypedEventHandler<MediaPlayer, object> MediaOpenedHandler;
         private DispatcherQueue dispatcherQueue;
@@ -49,16 +50,17 @@ namespace TrackMixerv2
         {
             this.InitializeComponent();
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-            MainMediaPlayer.DragStarting += MainMediaPlayer_DragStarting;
-            myMixedMediaPlayerControl.Loaded += MyMixedMediaPlayerControl_Loaded;
             PlaylistConfig = new PlaylistConfig();
-            PlaylistConfig.PropertyChanged += PlaylistConfig_PropertyChanged;
+            Loaded += MixedMediaPlayer_Loaded;
+        }
+
+        private void MixedMediaPlayer_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            RegisterPlayerEvents();
         }
 
         private void PlaylistConfig_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            Debug.WriteLine(PlaylistConfig.PlaylistMode);
-            Debug.WriteLine(PlaylistConfig.TimeSpan);
             if (PlaylistConfig.PlaylistMode == PlaylistMode.Chrono) 
             {
                 return;
@@ -119,16 +121,9 @@ namespace TrackMixerv2
             }
         } // DONT TOUCH?
 
-
-
-
         private void MyMixedMediaPlayerControl_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         {
-            myMixedMediaPlayerControl.NextTrackButton.Click += NextTrackButton_Click;
-            myMixedMediaPlayerControl.PreviousTrackButton.Click += PreviousTrackButton_Click;
-            myMixedMediaPlayerControl.AutoplayForwardOption.Click += AutoplayOption_Click;
-            myMixedMediaPlayerControl.AutoplayBackwardOption.Click += AutoplayOption_Click;
-            myMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
+            RegisterControlEvents();
         }
 
         private void AutoplayOption_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -169,6 +164,9 @@ namespace TrackMixerv2
 
         public async void OpenMediaAsync(string filePath)
         {
+            // cleanup previous video
+            Dispose();
+            // 
             currentVideo = filePath;
             StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
             MediaSource source = MediaSource.CreateFromStorageFile(file);
@@ -187,11 +185,13 @@ namespace TrackMixerv2
                     MediaSource source = MediaSource.CreateFromStorageFile(file);
                     MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
                     mediaPlayer.Source = mainPlaybackItem;
+                    MediaOpened.Add(false);
                     TrackOpenedHandler = new TypedEventHandler<MediaPlayer, object>((trackPlayer, o) =>
                     {
                         (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
                         TrackPlayers.Add(trackPlayer);
-                        if (currentIndex >= loadedMedia.AudioTracks.Count - 1)
+                        MediaOpened[currentIndex-1] = true;
+                        if (MediaOpened.All(x => x))
                         {
                             dispatcherQueue.TryEnqueue(() => {
                                 List<MediaPlayer> list = new List<MediaPlayer>();
@@ -204,10 +204,8 @@ namespace TrackMixerv2
                     mediaPlayer.MediaOpened += TrackOpenedHandler;
                 }
             });
-            MainMediaPlayer.MediaPlayer.MediaOpened += MediaOpenedHandler;
-            MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed += SystemMediaTransportControls_ButtonPressed;
-            MainMediaPlayer.MediaPlayer.SeekCompleted += MediaPlayer_SeekCompleted;
-            MainMediaPlayer.MediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
+            RegisterPlayerEvents();
+            RegisterControlEvents();
         }
 
         private void MediaPlayer_MediaEnded(MediaPlayer sender, object args)
@@ -264,20 +262,18 @@ namespace TrackMixerv2
 
             dispatcherQueue.TryEnqueue(() =>
             {
-                Dispose();
                 OpenMediaAsync(nextVideo);
             });
         }
 
         public void PlayPreviousTrack()
         {
-            string nextVideo = GetTrack(PlaylistConfig, currentVideo, Direction.Previous);
-            if(nextVideo == null) return;
+            string previousVideo = GetTrack(PlaylistConfig, currentVideo, Direction.Previous);
+            if(previousVideo == null) return;
 
             dispatcherQueue.TryEnqueue(() =>
             {
-                Dispose();
-                OpenMediaAsync(nextVideo);
+                OpenMediaAsync(previousVideo);
             });
         }
 
@@ -299,23 +295,108 @@ namespace TrackMixerv2
             }
         }
 
+        public void RegisterControlEvents()
+        {
+            if (myMixedMediaPlayerControl != null)
+            {
+                if (myMixedMediaPlayerControl.NextTrackButton != null)
+                    myMixedMediaPlayerControl.NextTrackButton.Click += NextTrackButton_Click;
+                if (myMixedMediaPlayerControl.PreviousTrackButton != null)
+                    myMixedMediaPlayerControl.PreviousTrackButton.Click += PreviousTrackButton_Click;
+                if (myMixedMediaPlayerControl.AutoplayForwardOption != null)
+                    myMixedMediaPlayerControl.AutoplayForwardOption.Click += AutoplayOption_Click;
+                if (myMixedMediaPlayerControl.AutoplayBackwardOption != null)
+                    myMixedMediaPlayerControl.AutoplayBackwardOption.Click += AutoplayOption_Click;
+                if (myMixedMediaPlayerControl.AutoplayOffOption != null)
+                    myMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
+                myMixedMediaPlayerControl.Loaded += MyMixedMediaPlayerControl_Loaded;
+            }
+        }
+
+        public void DeRegisterControlEvents()
+        {
+            if (myMixedMediaPlayerControl != null)
+            {
+                if (myMixedMediaPlayerControl.NextTrackButton != null)
+                    myMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
+                if (myMixedMediaPlayerControl.PreviousTrackButton != null)
+                    myMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
+                if (myMixedMediaPlayerControl.AutoplayForwardOption != null)
+                    myMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
+                if (myMixedMediaPlayerControl.AutoplayBackwardOption != null)
+                    myMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
+                if (myMixedMediaPlayerControl.AutoplayOffOption != null)
+                    myMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
+                myMixedMediaPlayerControl.Loaded -= MyMixedMediaPlayerControl_Loaded;
+            }
+        }
+
+        public void RegisterPlayerEvents()
+        {
+            if (PlaylistConfig != null)
+                PlaylistConfig.PropertyChanged += PlaylistConfig_PropertyChanged;
+            if (MainMediaPlayer != null)
+            {
+                if (MainMediaPlayer.MediaPlayer != null)
+                {
+                    MainMediaPlayer.MediaPlayer.MediaOpened += MediaOpenedHandler;
+                    MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed += SystemMediaTransportControls_ButtonPressed;
+                    MainMediaPlayer.MediaPlayer.SeekCompleted += MediaPlayer_SeekCompleted;
+                    MainMediaPlayer.MediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
+                }
+                MainMediaPlayer.DragStarting += MainMediaPlayer_DragStarting;
+            }
+        }
+
+        public void DeRegisterPlayerEvents()
+        {
+            if (PlaylistConfig != null)
+                PlaylistConfig.PropertyChanged -= PlaylistConfig_PropertyChanged;
+            if (MainMediaPlayer != null)
+            {
+                if (MainMediaPlayer.MediaPlayer != null)
+                {
+                    MainMediaPlayer.MediaPlayer.MediaOpened -= MediaOpenedHandler;
+                    MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed -= SystemMediaTransportControls_ButtonPressed;
+                    MainMediaPlayer.MediaPlayer.SeekCompleted -= MediaPlayer_SeekCompleted;
+                    MainMediaPlayer.MediaPlayer.MediaEnded -= MediaPlayer_MediaEnded;
+                }
+                MainMediaPlayer.DragStarting -= MainMediaPlayer_DragStarting;
+            }
+            if(TrackPlayers != null)
+            {
+                foreach(var trackPlayer in TrackPlayers)
+                {
+                    trackPlayer.MediaOpened -= TrackOpenedHandler;
+                }
+            }
+        }
+
         public void Dispose()
         {
-            MainMediaPlayer.MediaPlayer.MediaOpened -= MediaOpenedHandler;
-            MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed -= SystemMediaTransportControls_ButtonPressed;
-            MainMediaPlayer.MediaPlayer.SeekCompleted -= MediaPlayer_SeekCompleted;
-            MainMediaPlayer.MediaPlayer.MediaEnded -= MediaPlayer_MediaEnded;
-            MainMediaPlayer.MediaPlayer.Pause();
-            //MainMediaPlayer.MediaPlayer.Dispose();
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            DeRegisterPlayerEvents();
+            DeRegisterControlEvents();
+            MediaOpened = new List<bool>();
+            if (MainMediaPlayer?.MediaPlayer != null)
             {
-                trackPlayer.MediaOpened -= TrackOpenedHandler;
-                trackPlayer.Pause();
-                trackPlayer.Source = null;
-                //trackPlayer.Dispose();
+                MainMediaPlayer.MediaPlayer.Pause();
+                //MainMediaPlayer.MediaPlayer.Dispose();
             }
-            TrackPlayers.Clear();
+            if (TrackPlayers != null)
+            {
+                foreach (MediaPlayer trackPlayer in TrackPlayers)
+                {
+                    if (trackPlayer != null)
+                    {
+                        trackPlayer.Pause();
+                        trackPlayer.Source = null;
+                        //trackPlayer.Dispose();
+                    }
+                }
+                TrackPlayers.Clear();
+            }
             GC.Collect();
         }
+
     }
 }

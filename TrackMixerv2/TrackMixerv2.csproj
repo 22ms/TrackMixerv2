@@ -11,14 +11,30 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <ApplicationIcon>Assets\trackmixerv2.ico</ApplicationIcon>
-	<WindowsPackageType>None</WindowsPackageType>
+    <PackageCertificateThumbprint>A1D784AAFFE500A96CC13EBA23990B6022914E36</PackageCertificateThumbprint>
+    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
+	<EnableMsixTooling>true</EnableMsixTooling>
+	<PublishProfile>Properties\PublishProfiles\win10-$(Platform).pubxml</PublishProfile>
+	<GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+	<AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
+	<AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
+	<AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
+	<GenerateTestArtifacts>True</GenerateTestArtifacts>
+	<AppxBundle>Never</AppxBundle>
+	<HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+	<!--<WindowsPackageType>None</WindowsPackageType>-->
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="Assets\trackmixerv2.ico" />
     <None Remove="HomePage.xaml" />
     <None Remove="MixedMediaPlayer.xaml" />
     <None Remove="MixerPage.xaml" />
     <None Remove="Styles.xaml" />
     <None Remove="VideoExplorer.xaml" />
+
+	<None Update="Assets\video.ico">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</None>
   </ItemGroup>
 
   <ItemGroup>

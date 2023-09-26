@@ -92,6 +92,7 @@ namespace TrackMixerv2
         public static string IsInRatings (PlaylistConfig playlistConfig, string currentFile) // NULL MEANS YES!
         {
             if (currentFile == null || playlistConfig == null) return null;
+            if(MainWindow.TRACK_METADATA.ContainsKey(currentFile)) { }
             string rootFolder = playlistConfig.SubfolderOnly ? Path.GetDirectoryName(currentFile) : MainWindow.RootFoldersContainFile(currentFile);
             DateTime afterThis = DateTime.Now.Subtract(playlistConfig.TimeSpan);
             List<string> sortedVideoFiles = MainWindow.TRACK_METADATA

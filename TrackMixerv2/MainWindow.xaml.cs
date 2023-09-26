@@ -1,21 +1,18 @@
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Shapes;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.ApplicationModel;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
-using Windows.Media.AppBroadcasting;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.UI;
@@ -46,10 +43,17 @@ namespace TrackMixerv2
         public static string TRACK_METADATA_JSON = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2", "track_metadata.json");
         public static List<string> ROOT_FOLDERS;
         public static Dictionary<string, TrackMetadata> TRACK_METADATA = new Dictionary<string, TrackMetadata>();
+        private bool DialogOnStart = true;
 
-        public MainWindow()
+        public MainWindow(string[] files)
         {
             InitializeComponent();
+            if (files == null)
+                DialogOnStart = true;
+            else
+            {
+                AddNewTabs(files);
+            }
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
             //this.SetTitleBar(CustomDragRegion);
@@ -61,7 +65,7 @@ namespace TrackMixerv2
             TabView.AddTabButtonClick += TabView_AddTabButtonClick;
             TabView.TabCloseRequested += TabView_TabCloseRequested;
 
-            string folderPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
+            string folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
             if (!Directory.Exists(folderPath))
             {
                 Directory.CreateDirectory(folderPath);
@@ -72,9 +76,13 @@ namespace TrackMixerv2
             TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(TRACK_METADATA_JSON));
             if(TRACK_METADATA == null)
                 TRACK_METADATA= new Dictionary<string, TrackMetadata>();
+            IntPtr windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+            appWindow.SetIcon(Path.Combine(Package.Current.InstalledLocation.Path, @"\Assets\video.ico"));
         }
 
-        private async void TabView_LayoutUpdated(object sender, object e)
+        private void TabView_LayoutUpdated(object sender, object e)
         {
             SetTitleBarDragRegion();
             if (TabView.SelectedItem == null) return;
@@ -109,7 +117,8 @@ namespace TrackMixerv2
             string env = Environment.GetEnvironmentVariable(TM_ENV_NAME);
             if(env != null)
                 ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
-            TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
+            if(DialogOnStart)
+                TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
         }
 
         public async Task AddNewRootFolder()
@@ -173,6 +182,7 @@ namespace TrackMixerv2
 
         public async void AddNewTabs (string[] files)
         {
+            if(files == null || files.Length == 0) return;
             foreach (string file in files)
             {
                 if (RootFoldersContainFile(file) == null)
