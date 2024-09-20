@@ -252,7 +252,11 @@ namespace TrackMixerv2
                 MainMediaPlayer.MediaPlayer.Volume = volume;
                 return;
             }
-            TrackPlayers[trackIndex-1].Volume = volume;
+
+            if (TrackPlayers != null && trackIndex > 0 && trackIndex <= TrackPlayers.Count)
+            {
+                TrackPlayers[trackIndex - 1].Volume = volume;
+            }
         }
 
         public void PlayNextTrackOnDeletion()
