@@ -1,5 +1,5 @@
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Text;
+using Microsoft.VisualBasic.FileIO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -7,13 +7,11 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using static TrackMixerv2.MainWindow;
 using static TrackMixerv2.MixedMediaPlayer;
 using static TrackMixerv2.PlaylistHelper;
@@ -59,6 +57,35 @@ namespace TrackMixerv2
                 ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"] = DragAndDropCheckBox.IsChecked ?? false;
             }
         }
+
+        private void DeleteVideoConfirmation_Click(object sender, RoutedEventArgs e)
+        {
+            switch (MixedMediaPlayer.AutoplayMode)
+            {
+                case AutoplayMode.Off:
+                    MixedMediaPlayer.PlayNextTrack();
+                    break;
+                case AutoplayMode.Forward:
+                    MixedMediaPlayer.PlayNextTrack();
+                    break;
+                case AutoplayMode.Backward:
+                    MixedMediaPlayer.PlayPreviousTrack();
+                    break;
+            }
+            Task.Run(() =>
+            {
+                FileSystem.DeleteFile(path,
+                                      UIOption.OnlyErrorDialogs,
+                                      RecycleOption.SendToRecycleBin);
+            });
+            DeleteConfirmationFlyout.Hide();
+        }
+
+        private void CancelDelete_Click(object sender, RoutedEventArgs e)
+        {
+            DeleteConfirmationFlyout.Hide();
+        }
+
 
         private void PlaylistSubfolderToggle_Click(object sender, RoutedEventArgs e)
         {

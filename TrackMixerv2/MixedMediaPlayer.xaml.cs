@@ -39,7 +39,7 @@ namespace TrackMixerv2
         private TypedEventHandler<MediaPlayer, object> TrackOpenedHandler;
         private TypedEventHandler<MediaPlayer, object> MediaOpenedHandler;
         private DispatcherQueue dispatcherQueue;
-        private AutoplayMode autoplayMode = AutoplayMode.Off;
+        public AutoplayMode AutoplayMode = AutoplayMode.Off;
         public event EventHandler<MediaLoadedEventArgs> MediaLoaded;
         public PlaylistConfig PlaylistConfig;
 
@@ -136,15 +136,15 @@ namespace TrackMixerv2
                 {
                     case "forward":
                         myMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = (myMixedMediaPlayerControl.AutoplayForwardOption.Icon as FontIcon).Glyph;
-                        autoplayMode = AutoplayMode.Forward;
+                        AutoplayMode = AutoplayMode.Forward;
                         break;
                     case "backward":
                         myMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = (myMixedMediaPlayerControl.AutoplayBackwardOption.Icon as FontIcon).Glyph;
-                        autoplayMode = AutoplayMode.Backward;
+                        AutoplayMode = AutoplayMode.Backward;
                         break;
                     case "off":
                         myMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = (myMixedMediaPlayerControl.AutoplayOffOption.Icon as FontIcon).Glyph;
-                        autoplayMode = AutoplayMode.Off;
+                        AutoplayMode = AutoplayMode.Off;
                         break;
                 }
             }
@@ -210,7 +210,7 @@ namespace TrackMixerv2
 
         private void MediaPlayer_MediaEnded(MediaPlayer sender, object args)
         {
-            switch(autoplayMode)
+            switch(AutoplayMode)
             {
                 case AutoplayMode.Off:
                     break;
@@ -253,6 +253,11 @@ namespace TrackMixerv2
                 return;
             }
             TrackPlayers[trackIndex-1].Volume = volume;
+        }
+
+        public void PlayNextTrackOnDeletion()
+        {
+
         }
 
         public void PlayNextTrack()
