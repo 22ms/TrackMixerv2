@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using static TrackMixerv2.MainWindow;
 using static TrackMixerv2.MixedMediaPlayer;
@@ -27,7 +28,6 @@ namespace TrackMixerv2
     /// </summary>
     public sealed partial class MixerPage : Page
     {
-
         DispatcherQueue dispatcherQueue;
         TabViewItem tabViewItem;
         bool initialLoaded = false;
@@ -48,6 +48,16 @@ namespace TrackMixerv2
             PlaylistFilterChrono.Click += PlaylistFilterMode_Click;
             PlaylistFilterRating.Click += PlaylistFilterMode_Click;
             PlaylistSubfolderToggle.Click += PlaylistSubfolderToggle_Click;
+        }
+        private async void Preferences_Click(object sender, RoutedEventArgs e)
+        {
+            var result = await PreferencesDialog.ShowAsync();
+
+            // When the "save" button is pressed, save the settings
+            if (result == ContentDialogResult.Primary)
+            {
+                ApplicationData.Current.LocalSettings.Values["DragAndDropEnabled"] = DragAndDropCheckBox.IsChecked ?? false;
+            }
         }
 
         private void PlaylistSubfolderToggle_Click(object sender, RoutedEventArgs e)
@@ -120,6 +130,17 @@ namespace TrackMixerv2
                 MixedMediaPlayer.OpenMediaAsync(path);
                 MixedMediaPlayer.MediaLoaded += MixedMediaPlayer_MediaLoaded;
                 MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
+                
+                // Load settings
+                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropEnabled"))
+                {
+                    DragAndDropCheckBox.IsChecked = (bool)ApplicationData.Current.LocalSettings.Values["DragAndDropEnabled"];
+                }
+                else
+                {
+                    DragAndDropCheckBox.IsChecked = true;
+                }
+                
                 initialLoaded = true;
             });
         }

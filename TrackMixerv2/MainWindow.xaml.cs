@@ -63,6 +63,8 @@ namespace TrackMixerv2
             //this.SetTitleBar(CustomDragRegion);
             AppWindow.TitleBar.ButtonBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Color.FromArgb(0, 0, 0, 0);
+            this.Closed += MainWindow_Closed;
+
             CustomDragRegion.Loaded += CustomDragRegion_Loaded;
             SizeChanged += MainWindow_SizeChanged;
             TabView.LayoutUpdated += TabView_LayoutUpdated;
@@ -73,6 +75,15 @@ namespace TrackMixerv2
             WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
             var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.SetIcon(Path.Combine(Package.Current.InstalledLocation.Path, @"\Assets\video.ico"));
+        }
+
+        private void MainWindow_Closed(object sender, WindowEventArgs args)
+        {
+            CustomDragRegion.Loaded -= CustomDragRegion_Loaded;
+            SizeChanged -= MainWindow_SizeChanged;
+            TabView.LayoutUpdated -= TabView_LayoutUpdated;
+            TabView.AddTabButtonClick -= TabView_AddTabButtonClick;
+            TabView.TabCloseRequested -= TabView_TabCloseRequested;
         }
 
         private void TabView_LayoutUpdated(object sender, object e)

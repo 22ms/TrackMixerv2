@@ -29,9 +29,18 @@
                 <MenuFlyoutItem x:FieldModifier="public" x:Name="AddRootFlyout" Text="Add root folder" Tag="folder"/>
             </MenuBarItem>
             <MenuBarItem Title="Edit">
-                <MenuFlyoutItem Text="Preferences"/>
+                <MenuFlyoutItem Text="Preferences" Click="Preferences_Click"/>
             </MenuBarItem>
         </MenuBar>
+        <ContentDialog x:Name="PreferencesDialog"
+               Title="Preferences"
+               PrimaryButtonText="OK"
+               CloseButtonText="Cancel"
+               DefaultButton="Primary">
+            <StackPanel>
+                <CheckBox x:Name="DragAndDropCheckBox" Content="Open drag-and-drop on new tab"/>
+            </StackPanel>
+        </ContentDialog>
         <Border BorderThickness="0, 1, 0, 0" BorderBrush="{ThemeResource DividerStrokeColorDefault}" Grid.Column="1" Grid.Row="1" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
             <TextBlock Margin="0, 10, 0, 10" x:Name="VideoTitle" Text="No clip selected" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center" TextAlignment="Center"/>
         </Border>
