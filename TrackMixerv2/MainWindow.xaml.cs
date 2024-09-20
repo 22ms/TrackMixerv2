@@ -190,28 +190,98 @@ namespace TrackMixerv2
             return result.Path;
         }
 
-        public async void AddNewTabs (string[] files)
+        public async void AddNewTabs(string[] files, bool dragAndDropOnNewTab = true)
         {
-            if(files == null || files.Length == 0) return;
-            foreach (string file in files)
-            {
-                if (RootFoldersContainFile(file) == null) // todo check if every file inside, make more user friendly in general
-                    await AddNewRootFolder();
-                var newTab = new TabViewItem();
-                newTab.Header = Helper.GetTitleFromPath(file);
-                newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
+            if (files == null || files.Length == 0) return;
 
-                MixerPage page = new MixerPage(file);
-                page.AllowDrop = true;
-                page.DragOver += MixedMediaPlayer_DragOver;
-                page.Drop += MixedMediaPlayer_Drop;
-                page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
-                page.AddRootFlyout.Click += MenuFlyoutItem_Click;
-                newTab.Content = page;
-                Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
-                newTab.Style = tabStyle;
-                TabView.TabItems.Add(newTab);
+            if (dragAndDropOnNewTab)
+            {
+                // Old behavior: Open all files in new tabs
+                foreach (string file in files)
+                {
+                    if (RootFoldersContainFile(file) == null)
+                        await AddNewRootFolder();
+
+                    var newTab = new TabViewItem();
+                    newTab.Header = Helper.GetTitleFromPath(file);
+                    newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
+
+                    MixerPage page = new MixerPage(file);
+                    page.AllowDrop = true;
+                    page.DragOver += MixedMediaPlayer_DragOver;
+                    page.Drop += MixedMediaPlayer_Drop;
+                    page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
+                    page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+                    newTab.Content = page;
+
+                    Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
+                    newTab.Style = tabStyle;
+                    TabView.TabItems.Add(newTab);
+                }
             }
+            else
+            {
+                // Replace the current tab with the first file
+                string firstFile = files[0];
+
+                if (RootFoldersContainFile(firstFile) == null) // Check if the first file is in root folders
+                    await AddNewRootFolder();
+
+                var currentTab = TabView.SelectedItem as TabViewItem;
+                if (currentTab != null)
+                {
+                    currentTab.Header = Helper.GetTitleFromPath(firstFile);
+                    currentTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
+
+                    ((MixerPage)currentTab.Content).OpenNewMedia(firstFile);
+                }
+                else
+                {
+                    // If no tab is selected, create a new tab for the first file
+                    var newTab = new TabViewItem();
+                    newTab.Header = Helper.GetTitleFromPath(firstFile);
+                    newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
+
+                    MixerPage page = new MixerPage(firstFile);
+                    page.AllowDrop = true;
+                    page.DragOver += MixedMediaPlayer_DragOver;
+                    page.Drop += MixedMediaPlayer_Drop;
+                    page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
+                    page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+                    newTab.Content = page;
+
+                    Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
+                    newTab.Style = tabStyle;
+                    TabView.TabItems.Add(newTab);
+                    TabView.SelectedItem = newTab;
+                }
+
+                // Add any remaining files to new tabs
+                for (int i = 1; i < files.Length; i++)
+                {
+                    string file = files[i];
+                    if (RootFoldersContainFile(file) == null)
+                        await AddNewRootFolder();
+
+                    var newTab = new TabViewItem();
+                    newTab.Header = Helper.GetTitleFromPath(file);
+                    newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
+
+                    MixerPage page = new MixerPage(file);
+                    page.AllowDrop = true;
+                    page.DragOver += MixedMediaPlayer_DragOver;
+                    page.Drop += MixedMediaPlayer_Drop;
+                    page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
+                    page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+                    newTab.Content = page;
+
+                    Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
+                    newTab.Style = tabStyle;
+                    TabView.TabItems.Add(newTab);
+                }
+            }
+
+            // Ensure a tab is selected if none are
             if (TabView.SelectedIndex < 0)
             {
                 try
@@ -302,7 +372,15 @@ namespace TrackMixerv2
                                     .Where(file => Helper.IsVideoFile(file))
                                     .Select(file => file.Path)
                                     .ToList();
-                    AddNewTabs(videoFilePaths.ToArray());
+
+                    if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropOnNewTab"))
+                    {
+                        AddNewTabs(videoFilePaths.ToArray(), (bool) ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"]);
+                    }
+                    else
+                    {
+                        AddNewTabs(videoFilePaths.ToArray());
+                    }
                 }
             });
         }

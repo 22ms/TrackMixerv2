@@ -56,7 +56,7 @@ namespace TrackMixerv2
             // When the "save" button is pressed, save the settings
             if (result == ContentDialogResult.Primary)
             {
-                ApplicationData.Current.LocalSettings.Values["DragAndDropEnabled"] = DragAndDropCheckBox.IsChecked ?? false;
+                ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"] = DragAndDropCheckBox.IsChecked ?? false;
             }
         }
 
@@ -132,9 +132,9 @@ namespace TrackMixerv2
                 MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
                 
                 // Load settings
-                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropEnabled"))
+                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropOnNewTab"))
                 {
-                    DragAndDropCheckBox.IsChecked = (bool)ApplicationData.Current.LocalSettings.Values["DragAndDropEnabled"];
+                    DragAndDropCheckBox.IsChecked = (bool)ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"];
                 }
                 else
                 {
