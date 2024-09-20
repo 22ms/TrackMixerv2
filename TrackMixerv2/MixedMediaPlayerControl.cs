@@ -17,6 +17,7 @@ namespace TrackMixerv2
 {
     public sealed class MixedMediaPlayerControl : MediaTransportControls
     {
+        public Slider ProgressSlider;
         public Button NextTrackButton, PreviousTrackButton;
         public MenuFlyoutItem AutoplayForwardOption, AutoplayBackwardOption, AutoplayOffOption;
         public FontIcon AutoplaySmallIcon;
@@ -28,6 +29,7 @@ namespace TrackMixerv2
 
         protected override void OnApplyTemplate()
         {
+            ProgressSlider = GetTemplateChild("ProgressSlider") as Slider;
             NextTrackButton = GetTemplateChild("NextTrackButton") as Button;
             PreviousTrackButton = GetTemplateChild("PreviousTrackButton") as Button;
             AutoplayForwardOption = GetTemplateChild("AutoplayForwardOption") as MenuFlyoutItem;

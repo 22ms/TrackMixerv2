@@ -299,6 +299,13 @@ namespace TrackMixerv2
         {
             if (myMixedMediaPlayerControl != null)
             {
+                // Right click pause fix
+                if(myMixedMediaPlayerControl.ProgressSlider != null)
+                {
+                    myMixedMediaPlayerControl.ProgressSlider.PointerPressed += ProgressSlider_PointerPressed;
+                    myMixedMediaPlayerControl.ProgressSlider.PointerReleased += ProgressSlider_PointerReleased;
+                }
+
                 if (myMixedMediaPlayerControl.NextTrackButton != null)
                     myMixedMediaPlayerControl.NextTrackButton.Click += NextTrackButton_Click;
                 if (myMixedMediaPlayerControl.PreviousTrackButton != null)
@@ -311,6 +318,16 @@ namespace TrackMixerv2
                     myMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
                 myMixedMediaPlayerControl.Loaded += MyMixedMediaPlayerControl_Loaded;
             }
+        }
+
+        private void ProgressSlider_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            PauseAll();
+        }
+
+        private void ProgressSlider_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            PlayAll();
         }
 
         public void DeRegisterControlEvents()
@@ -342,6 +359,7 @@ namespace TrackMixerv2
                     MainMediaPlayer.MediaPlayer.MediaOpened += MediaOpenedHandler;
                     MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed += SystemMediaTransportControls_ButtonPressed;
                     MainMediaPlayer.MediaPlayer.SeekCompleted += MediaPlayer_SeekCompleted;
+                    //MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.
                     MainMediaPlayer.MediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
                 }
                 MainMediaPlayer.DragStarting += MainMediaPlayer_DragStarting;

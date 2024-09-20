@@ -17,9 +17,6 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.UI;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
-
 namespace TrackMixerv2
 {
     /// <summary>
@@ -193,7 +190,6 @@ namespace TrackMixerv2
                 newTab.Header = Helper.GetTitleFromPath(file);
                 newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
 
-                // The Content of a TabViewItem is often a frame which hosts a page.
                 MixerPage page = new MixerPage(file);
                 page.AllowDrop = true;
                 page.DragOver += MixedMediaPlayer_DragOver;
