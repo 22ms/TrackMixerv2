@@ -100,9 +100,9 @@ namespace TrackMixerv2
                 .Select(pair => pair.Key)
                 .ToList();
             if (sortedVideoFiles.Count <= 0) return null;
+            bool ratingAboveZero = (MainWindow.TRACK_METADATA.ContainsKey(currentFile) && MainWindow.TRACK_METADATA[currentFile].Rating > 0);
             int currentIndex = sortedVideoFiles.IndexOf(currentFile);
-            if(currentIndex  != -1) return null;
-            if (MainWindow.TRACK_METADATA.ContainsKey(currentFile) && MainWindow.TRACK_METADATA[currentFile].Rating > 0) return null; // added check for rating 0
+            if(currentIndex  != -1 && ratingAboveZero) return null;
             return sortedVideoFiles[0];
         }
 

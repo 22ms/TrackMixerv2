@@ -11,7 +11,7 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <ApplicationIcon>Assets\trackmixerv2.ico</ApplicationIcon>
-    <PackageCertificateThumbprint>A1D784AAFFE500A96CC13EBA23990B6022914E36</PackageCertificateThumbprint>
+    <PackageCertificateThumbprint>3C24D79ED4D5FF90302DB41094F5ED722D58EFED</PackageCertificateThumbprint>
     <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
 	<EnableMsixTooling>true</EnableMsixTooling>
 	<PublishProfile>Properties\PublishProfiles\win10-$(Platform).pubxml</PublishProfile>

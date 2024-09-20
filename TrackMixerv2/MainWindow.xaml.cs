@@ -40,20 +40,27 @@ namespace TrackMixerv2
 
         private DispatcherQueue dispatcherQueue;
         public static string TM_ENV_NAME = "TRACKMIXER_ROOT_FOLDERS";
-        public static string TRACK_METADATA_JSON = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2", "track_metadata.json");
+        public static string TRACK_METADATA_JSON = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2", "track_metadata.json");
         public static List<string> ROOT_FOLDERS;
         public static Dictionary<string, TrackMetadata> TRACK_METADATA = new Dictionary<string, TrackMetadata>();
-        private bool DialogOnStart = true;
+        private string[] launchFiles = null;
 
         public MainWindow(string[] files)
         {
             InitializeComponent();
-            if (files == null)
-                DialogOnStart = true;
-            else
+            string folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
+            if (!Directory.Exists(folderPath))
             {
-                AddNewTabs(files);
+                Directory.CreateDirectory(folderPath);
             }
+            if (!File.Exists(TRACK_METADATA_JSON))
+                File.WriteAllText(TRACK_METADATA_JSON, "");
+            //File.WriteAllText(TRACK_METADATA_JSON, "");
+            TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(TRACK_METADATA_JSON));
+            if (TRACK_METADATA == null)
+                TRACK_METADATA = new Dictionary<string, TrackMetadata>();
+            launchFiles = files;
+
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
             //this.SetTitleBar(CustomDragRegion);
@@ -65,17 +72,6 @@ namespace TrackMixerv2
             TabView.AddTabButtonClick += TabView_AddTabButtonClick;
             TabView.TabCloseRequested += TabView_TabCloseRequested;
 
-            string folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
-            if (!Directory.Exists(folderPath))
-            {
-                Directory.CreateDirectory(folderPath);
-            }
-            if (!File.Exists(TRACK_METADATA_JSON))
-                File.WriteAllText(TRACK_METADATA_JSON, "");
-            //File.WriteAllText(TRACK_METADATA_JSON, "");
-            TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(TRACK_METADATA_JSON));
-            if(TRACK_METADATA == null)
-                TRACK_METADATA= new Dictionary<string, TrackMetadata>();
             IntPtr windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
             WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
             var appWindow = AppWindow.GetFromWindowId(windowId);
@@ -111,14 +107,20 @@ namespace TrackMixerv2
             AppWindow.TitleBar.SetDragRectangles(dragRects);
         }
 
-        private void TabView_Loaded(object sender, RoutedEventArgs e)
+        private async void TabView_Loaded(object sender, RoutedEventArgs e)
         {
             ROOT_FOLDERS = new List<string>();
             string env = Environment.GetEnvironmentVariable(TM_ENV_NAME);
             if(env != null)
                 ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
-            if(DialogOnStart)
+            if(launchFiles == null) // TODO: put the following inside of a new method, since redundant
+            {
                 TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
+            }
+            else
+            {
+                AddNewTabs(launchFiles);
+            }
         }
 
         public async Task AddNewRootFolder()
@@ -128,7 +130,7 @@ namespace TrackMixerv2
             string newFolder = await PickFolderDialog();
             if (newFolder == null) return;
             ROOT_FOLDERS.Add(newFolder);
-            Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', ROOT_FOLDERS), EnvironmentVariableTarget.User));
+            Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
         }
 
         public static string RootFoldersContainFile (string path)
@@ -185,7 +187,7 @@ namespace TrackMixerv2
             if(files == null || files.Length == 0) return;
             foreach (string file in files)
             {
-                if (RootFoldersContainFile(file) == null)
+                if (RootFoldersContainFile(file) == null) // todo check if every file inside, make more user friendly in general
                     await AddNewRootFolder();
                 var newTab = new TabViewItem();
                 newTab.Header = Helper.GetTitleFromPath(file);

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Windows.Storage;
@@ -15,6 +16,12 @@ namespace TrackMixerv2
         {
             var videoExtensions = new string[] { ".mp4", ".wmv", ".avi" }; // add more if needed
             return videoExtensions.Contains(file.FileType.ToLower());
+        }
+        public static void AppendToDebugFile(string text)
+        {
+            string testfile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2", "debug.txt");
+            File.AppendAllText(testfile, text);
+            File.AppendAllText(testfile, "\n");
         }
     }
 }
