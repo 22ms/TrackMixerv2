@@ -259,11 +259,6 @@ namespace TrackMixerv2
             }
         }
 
-        public void PlayNextTrackOnDeletion()
-        {
-
-        }
-
         public void PlayNextTrack()
         {
             string nextVideo = GetTrack(PlaylistConfig, currentVideo, Direction.Next);

@@ -72,12 +72,14 @@ namespace TrackMixerv2
                     MixedMediaPlayer.PlayPreviousTrack();
                     break;
             }
-            Task.Run(() =>
+            try
             {
-                FileSystem.DeleteFile(path,
-                                      UIOption.OnlyErrorDialogs,
-                                      RecycleOption.SendToRecycleBin);
-            });
+                FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
             DeleteConfirmationFlyout.Hide();
         }
 
