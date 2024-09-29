@@ -10,7 +10,7 @@
   <Identity
     Name="5f77168c-e2d3-4c60-9cfa-a0d1ed2c844f"
     Publisher="CN=doppelzwei"
-    Version="2.1.0.0" />
+    Version="2.2.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="5f77168c-e2d3-4c60-9cfa-a0d1ed2c844f" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
