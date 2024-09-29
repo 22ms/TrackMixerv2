@@ -399,6 +399,12 @@ namespace TrackMixerv2
             TimeSpan currentPosition = mediaPlayer.Position;
             TimeSpan fastForwardTime = TimeSpan.FromMilliseconds(offsetMillis);
             TimeSpan newPosition = currentPosition + fastForwardTime;
+
+            if (newPosition >= mediaPlayer.NaturalDuration)
+            {
+                return;
+            }
+
             mediaPlayer.Position = newPosition;
         }
 

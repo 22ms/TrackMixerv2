@@ -209,6 +209,7 @@ namespace TrackMixerv2
                 {
                     int trackIndex = i;
                     Slider volumeSlider = new Slider();
+                    volumeSlider.IsTabStop = false;
                     volumeSlider.Height = 100;
                     volumeSlider.TickFrequency = 5;
                     volumeSlider.TickPlacement = TickPlacement.Outside;

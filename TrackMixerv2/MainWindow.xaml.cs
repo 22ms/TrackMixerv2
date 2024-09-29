@@ -119,6 +119,7 @@ namespace TrackMixerv2
 
         private async void TabView_Loaded(object sender, RoutedEventArgs e)
         {
+            DisableTabStops(TabView);
             ROOT_FOLDERS = new List<string>();
             string env = Environment.GetEnvironmentVariable(TM_ENV_NAME);
             if(env != null)
