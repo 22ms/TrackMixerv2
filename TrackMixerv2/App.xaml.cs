@@ -67,7 +67,14 @@ namespace TrackMixerv2
                 }
                 else
                 {
-                    m_window.AddNewTabs(files);
+                    if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DoubleClickOnNewTab"))
+                    {
+                        m_window.AddNewTabs(files, (bool)ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"]);
+                    }
+                    else
+                    {
+                        m_window.AddNewTabs(files);
+                    }
                 }
                 m_window.Activate();
             });

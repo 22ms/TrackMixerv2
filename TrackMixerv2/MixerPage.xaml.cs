@@ -233,6 +233,8 @@ namespace TrackMixerv2
                     try
                     {
                         trackName.Text = (args.TrackPlayers[i].Source as MediaPlaybackItem).AudioTracks[i].Name;
+                        if (trackName.Text == "")
+                            trackName.Text = "Volume";
                     }
                     catch(Exception)
                     {

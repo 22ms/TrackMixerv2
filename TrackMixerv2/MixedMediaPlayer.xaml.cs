@@ -166,7 +166,7 @@ namespace TrackMixerv2
         {
             // cleanup previous video
             Dispose();
-            // 
+            //
             currentVideo = filePath;
             StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
             MediaSource source = MediaSource.CreateFromStorageFile(file);
@@ -177,31 +177,43 @@ namespace TrackMixerv2
                 MediaPlaybackItem loadedMedia = mainPlayer.Source as MediaPlaybackItem;
                 if (loadedMedia == null) return;
                 if (loadedMedia.AudioTracks.Count > 0) loadedMedia.AudioTracks.SelectedIndex = 0;
-                for (int i = 1; i < loadedMedia.AudioTracks.Count; i++)
+
+                if (loadedMedia.AudioTracks.Count > 1)
                 {
-                    int currentIndex = i;
-                    MediaPlayer mediaPlayer = new MediaPlayer();
-                    mediaPlayer.AutoPlay = true;
-                    MediaSource source = MediaSource.CreateFromStorageFile(file);
-                    MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
-                    mediaPlayer.Source = mainPlaybackItem;
-                    MediaOpened.Add(false);
-                    TrackOpenedHandler = new TypedEventHandler<MediaPlayer, object>((trackPlayer, o) =>
+                    for (int i = 1; i < loadedMedia.AudioTracks.Count; i++)
                     {
-                        (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
-                        TrackPlayers.Add(trackPlayer);
-                        MediaOpened[currentIndex-1] = true;
-                        if (MediaOpened.All(x => x))
+                        int currentIndex = i;
+                        MediaPlayer mediaPlayer = new MediaPlayer();
+                        mediaPlayer.AutoPlay = true;
+                        MediaSource source = MediaSource.CreateFromStorageFile(file);
+                        MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
+                        mediaPlayer.Source = mainPlaybackItem;
+                        MediaOpened.Add(false);
+                        TrackOpenedHandler = new TypedEventHandler<MediaPlayer, object>((trackPlayer, o) =>
                         {
-                            dispatcherQueue.TryEnqueue(() => {
-                                List<MediaPlayer> list = new List<MediaPlayer>();
-                                list.Add(MainMediaPlayer.MediaPlayer);
-                                list.AddRange(TrackPlayers);
-                                MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
-                            });
-                        }
+                            (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
+                            TrackPlayers.Add(trackPlayer);
+                            MediaOpened[currentIndex - 1] = true;
+                            if (MediaOpened.All(x => x))
+                            {
+                                dispatcherQueue.TryEnqueue(() => {
+                                    List<MediaPlayer> list = new List<MediaPlayer>();
+                                    list.Add(MainMediaPlayer.MediaPlayer);
+                                    list.AddRange(TrackPlayers);
+                                    MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
+                                });
+                            }
+                        });
+                        mediaPlayer.MediaOpened += TrackOpenedHandler;
+                    }
+                }
+                else
+                {
+                    dispatcherQueue.TryEnqueue(() => {
+                        List<MediaPlayer> list = new List<MediaPlayer>();
+                        list.Add(MainMediaPlayer.MediaPlayer);
+                        MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
                     });
-                    mediaPlayer.MediaOpened += TrackOpenedHandler;
                 }
             });
             RegisterPlayerEvents();
