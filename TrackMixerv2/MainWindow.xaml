@@ -12,7 +12,7 @@
     <Window.SystemBackdrop>
         <MicaBackdrop Kind="BaseAlt"/>
     </Window.SystemBackdrop>
-    
+
     <!-- Custom title bar -->
     <TabView x:Name="TabView" Loaded="TabView_Loaded" x:FieldModifier="public">
 

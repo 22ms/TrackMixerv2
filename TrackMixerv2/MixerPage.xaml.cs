@@ -15,15 +15,10 @@ using Windows.Storage;
 using static TrackMixerv2.MainWindow;
 using static TrackMixerv2.MixedMediaPlayer;
 using static TrackMixerv2.PlaylistHelper;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using Microsoft.UI.Xaml.Input;
 
 namespace TrackMixerv2
 {
-    /// <summary>
-    /// An empty page that can be used on its own or navigated to within a Frame.
-    /// </summary>
     public sealed partial class MixerPage : Page
     {
         DispatcherQueue dispatcherQueue;
@@ -55,7 +50,12 @@ namespace TrackMixerv2
             if (result == ContentDialogResult.Primary)
             {
                 ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"] = DragAndDropCheckBox.IsChecked ?? false;
+                ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"] = DoubleClickCheckBox.IsChecked ?? false;
             }
+        }
+        private void DeleteConfirmationFlyout_Opened(object sender, object e)
+        {
+            MixedMediaPlayer.PauseAll();
         }
 
         private void DeleteVideoConfirmation_Click(object sender, RoutedEventArgs e)
@@ -80,11 +80,18 @@ namespace TrackMixerv2
             {
                 Debug.WriteLine(ex.Message);
             }
+            MixedMediaPlayer.PlayAll();
+            DeleteConfirmationFlyout.Hide();
+        }
+        private void DeleteConfirmationFlyout_Closed(object sender, object e)
+        {
+            MixedMediaPlayer.PlayAll();
             DeleteConfirmationFlyout.Hide();
         }
 
         private void CancelDelete_Click(object sender, RoutedEventArgs e)
         {
+            MixedMediaPlayer.PlayAll();
             DeleteConfirmationFlyout.Hide();
         }
 
@@ -134,16 +141,6 @@ namespace TrackMixerv2
             MixedMediaPlayer.OpenMediaAsync(path);
         }
 
-        public void PlayMedia()
-        {
-            MixedMediaPlayer.PlayAll();
-        }
-
-        public void PauseMedia()
-        {
-            MixedMediaPlayer.PauseAll();
-        }
-
         private void MediaPlayer_MediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
         {
             Debug.WriteLine(args.Error);
@@ -169,7 +166,16 @@ namespace TrackMixerv2
                 {
                     DragAndDropCheckBox.IsChecked = true;
                 }
-                
+
+                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DoubleClickOnNewTab"))
+                {
+                    DoubleClickCheckBox.IsChecked = (bool)ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"];
+                }
+                else
+                {
+                    DoubleClickCheckBox.IsChecked = true;
+                }
+
                 initialLoaded = true;
             });
         }
@@ -313,6 +319,14 @@ namespace TrackMixerv2
             await File.WriteAllTextAsync(TRACK_METADATA_JSON, JsonConvert.SerializeObject(TRACK_METADATA));
             TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(await File.ReadAllTextAsync(TRACK_METADATA_JSON)); // workaround, not sure why i need that line
         }
+        public void PlayMedia()
+        {
+            MixedMediaPlayer.PlayAll();
+        }
+        public void PauseMedia()
+        {
+            MixedMediaPlayer.PauseAll();
+        }
 
         private double GetSavedSliderValue(int index)
         {
@@ -331,6 +345,27 @@ namespace TrackMixerv2
                 }
                 return 100;
             }
+        }
+        private void Space_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (MixedMediaPlayer.MainMediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+            {
+                MixedMediaPlayer.PauseAll();
+            }
+            else
+            {
+                MixedMediaPlayer.PlayAll();
+            }
+        }
+
+        private void Right_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            MixedMediaPlayer.FastForward(5000);
+        }
+
+        private void Left_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            MixedMediaPlayer.Rewind(5000);
         }
     }
 }

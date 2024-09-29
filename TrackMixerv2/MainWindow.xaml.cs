@@ -4,9 +4,11 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -127,7 +129,14 @@ namespace TrackMixerv2
             }
             else
             {
-                AddNewTabs(launchFiles);
+                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DoubleClickOnNewTab"))
+                {
+                    AddNewTabs(launchFiles, (bool)ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"]);
+                }
+                else
+                {
+                    AddNewTabs(launchFiles);
+                }
             }
         }
 
@@ -190,11 +199,11 @@ namespace TrackMixerv2
             return result.Path;
         }
 
-        public async void AddNewTabs(string[] files, bool dragAndDropOnNewTab = true)
+        public async void AddNewTabs(string[] files, bool onNewTab = true)
         {
             if (files == null || files.Length == 0) return;
 
-            if (dragAndDropOnNewTab)
+            if (onNewTab)
             {
                 // Old behavior: Open all files in new tabs
                 foreach (string file in files)
@@ -290,6 +299,8 @@ namespace TrackMixerv2
                 }
                 catch { }
             }
+
+            DisableTabStops(TabView);
         }
 
         private async void TabView_AddTabButtonClick(TabView sender, object args)
@@ -406,6 +417,24 @@ namespace TrackMixerv2
                 case "folder":
                     await AddNewRootFolder();
                     break;
+            }
+        }
+        public static void DisableTabStops(DependencyObject root)
+        {
+            if (root == null) return;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+
+                // If the child is a control and has a TabStop, disable it
+                if (child is Control control)
+                {
+                    control.IsTabStop = false;
+                }
+
+                // Recursively disable TabStop for children
+                DisableTabStops(child);
             }
         }
     }

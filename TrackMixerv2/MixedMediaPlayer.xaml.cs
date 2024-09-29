@@ -394,6 +394,31 @@ namespace TrackMixerv2
             }
         }
 
+        public static void OffsetMediaPlayerPlaybackPosition(MediaPlayer mediaPlayer, int offsetMillis)
+        {
+            TimeSpan currentPosition = mediaPlayer.Position;
+            TimeSpan fastForwardTime = TimeSpan.FromMilliseconds(offsetMillis);
+            TimeSpan newPosition = currentPosition + fastForwardTime;
+            mediaPlayer.Position = newPosition;
+        }
+
+        public void FastForward(int timeMillis)
+        {
+            OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, timeMillis);
+            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            {
+                OffsetMediaPlayerPlaybackPosition(trackPlayer, timeMillis);
+            }
+        }
+        public void Rewind(int timeMillis)
+        {
+            OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, -timeMillis);
+            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            {
+                OffsetMediaPlayerPlaybackPosition(trackPlayer, -timeMillis);
+            }
+        }
+
         public void Dispose()
         {
             DeRegisterPlayerEvents();
