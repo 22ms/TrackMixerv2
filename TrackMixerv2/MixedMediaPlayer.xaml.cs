@@ -1,21 +1,18 @@
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
-using Windows.Graphics.Imaging;
 using Windows.Media;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
-using Windows.Storage.Streams;
 using static TrackMixerv2.PlaylistHelper;
 
 namespace TrackMixerv2
@@ -46,12 +43,20 @@ namespace TrackMixerv2
         private string currentVideo; // subject to change
         private string preChangeVideo; // subject to change
 
-        public MixedMediaPlayer() 
+        public MixedMediaPlayer()
         {
             this.InitializeComponent();
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             PlaylistConfig = new PlaylistConfig();
             Loaded += MixedMediaPlayer_Loaded;
+        }
+
+        private void MediaPlayer_MediaPlayerRateChanged(MediaPlayer sender, MediaPlayerRateChangedEventArgs args)
+        {
+            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            {
+                trackPlayer.PlaybackRate = sender.PlaybackRate;
+            }
         }
 
         private void MixedMediaPlayer_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -61,7 +66,7 @@ namespace TrackMixerv2
 
         private void PlaylistConfig_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (PlaylistConfig.PlaylistMode == PlaylistMode.Chrono) 
+            if (PlaylistConfig.PlaylistMode == PlaylistMode.Chrono)
             {
                 return;
                 //if (preChangeVideo == null) return;
@@ -101,7 +106,7 @@ namespace TrackMixerv2
                 args.DragUI.SetContentFromBitmapImage(bitmapImage);
                 args.Data.RequestedOperation = DataPackageOperation.Copy;
                 args.AllowedOperations = DataPackageOperation.Copy;
-                
+
                 // Calculate and print the time elapsed
                 stopwatch.Stop();
                 TimeSpan elapsed = stopwatch.Elapsed;
@@ -162,12 +167,23 @@ namespace TrackMixerv2
             PlayNextTrack();
         }
 
+        public void ChangePlaybackSpeed(double rate)
+        {
+            if (currentVideo == null) return;
+            MainMediaPlayer.MediaPlayer.PlaybackRate = rate;
+            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            {
+                trackPlayer.PlaybackRate = rate;
+            }
+        }
+
         public async void OpenMediaAsync(string filePath)
         {
             // cleanup previous video
             Dispose();
             //
             currentVideo = filePath;
+            ApplicationData.Current.LocalSettings.Values["RecentVideo"] = currentVideo;
             StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
             MediaSource source = MediaSource.CreateFromStorageFile(file);
             MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
@@ -196,7 +212,8 @@ namespace TrackMixerv2
                             MediaOpened[currentIndex - 1] = true;
                             if (MediaOpened.All(x => x))
                             {
-                                dispatcherQueue.TryEnqueue(() => {
+                                dispatcherQueue.TryEnqueue(() =>
+                                {
                                     List<MediaPlayer> list = new List<MediaPlayer>();
                                     list.Add(MainMediaPlayer.MediaPlayer);
                                     list.AddRange(TrackPlayers);
@@ -209,7 +226,8 @@ namespace TrackMixerv2
                 }
                 else
                 {
-                    dispatcherQueue.TryEnqueue(() => {
+                    dispatcherQueue.TryEnqueue(() =>
+                    {
                         List<MediaPlayer> list = new List<MediaPlayer>();
                         list.Add(MainMediaPlayer.MediaPlayer);
                         MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
@@ -222,7 +240,7 @@ namespace TrackMixerv2
 
         private void MediaPlayer_MediaEnded(MediaPlayer sender, object args)
         {
-            switch(AutoplayMode)
+            switch (AutoplayMode)
             {
                 case AutoplayMode.Off:
                     break;
@@ -259,7 +277,7 @@ namespace TrackMixerv2
         public void SetVolume(int trackIndex, double volume)
         {
             volume = volume / 100;
-            if(trackIndex == 0)
+            if (trackIndex == 0)
             {
                 MainMediaPlayer.MediaPlayer.Volume = volume;
                 return;
@@ -285,7 +303,7 @@ namespace TrackMixerv2
         public void PlayPreviousTrack()
         {
             string previousVideo = GetTrack(PlaylistConfig, currentVideo, Direction.Previous);
-            if(previousVideo == null) return;
+            if (previousVideo == null) return;
 
             dispatcherQueue.TryEnqueue(() =>
             {
@@ -295,7 +313,7 @@ namespace TrackMixerv2
 
         public void PlayAll()
         {
-            MainMediaPlayer.MediaPlayer.Play(); 
+            MainMediaPlayer.MediaPlayer.Play();
             foreach (MediaPlayer trackPlayer in TrackPlayers)
             {
                 trackPlayer.Play();
@@ -316,7 +334,7 @@ namespace TrackMixerv2
             if (myMixedMediaPlayerControl != null)
             {
                 // Right click pause fix
-                if(myMixedMediaPlayerControl.ProgressSlider != null)
+                if (myMixedMediaPlayerControl.ProgressSlider != null)
                 {
                     myMixedMediaPlayerControl.ProgressSlider.PointerPressed += ProgressSlider_PointerPressed;
                     myMixedMediaPlayerControl.ProgressSlider.PointerReleased += ProgressSlider_PointerReleased;
@@ -334,6 +352,11 @@ namespace TrackMixerv2
                     myMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
                 myMixedMediaPlayerControl.Loaded += MyMixedMediaPlayerControl_Loaded;
             }
+        }
+
+        private void PlaybackRateButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            Trace.WriteLine(MainMediaPlayer.MediaPlayer.PlaybackRate);
         }
 
         private void ProgressSlider_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -375,6 +398,7 @@ namespace TrackMixerv2
                     MainMediaPlayer.MediaPlayer.MediaOpened += MediaOpenedHandler;
                     MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed += SystemMediaTransportControls_ButtonPressed;
                     MainMediaPlayer.MediaPlayer.SeekCompleted += MediaPlayer_SeekCompleted;
+                    MainMediaPlayer.MediaPlayer.MediaPlayerRateChanged += MediaPlayer_MediaPlayerRateChanged;
                     //MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.
                     MainMediaPlayer.MediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
                 }
@@ -393,13 +417,14 @@ namespace TrackMixerv2
                     MainMediaPlayer.MediaPlayer.MediaOpened -= MediaOpenedHandler;
                     MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed -= SystemMediaTransportControls_ButtonPressed;
                     MainMediaPlayer.MediaPlayer.SeekCompleted -= MediaPlayer_SeekCompleted;
+                    MainMediaPlayer.MediaPlayer.MediaPlayerRateChanged -= MediaPlayer_MediaPlayerRateChanged;
                     MainMediaPlayer.MediaPlayer.MediaEnded -= MediaPlayer_MediaEnded;
                 }
                 MainMediaPlayer.DragStarting -= MainMediaPlayer_DragStarting;
             }
-            if(TrackPlayers != null)
+            if (TrackPlayers != null)
             {
-                foreach(var trackPlayer in TrackPlayers)
+                foreach (var trackPlayer in TrackPlayers)
                 {
                     trackPlayer.MediaOpened -= TrackOpenedHandler;
                 }
@@ -463,5 +488,24 @@ namespace TrackMixerv2
             GC.Collect();
         }
 
+        private void MainMediaPlayer_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse)
+            {
+                var pointerPoint = e.GetCurrentPoint((UIElement)sender);
+                if (!pointerPoint.Properties.IsRightButtonPressed) return;
+            }
+            else
+            {
+                return;
+            }
+            if ((e.OriginalSource as Grid).Name != "RootGrid") return;
+            ChangePlaybackSpeed(2.0);
+        }
+
+        private void MainMediaPlayer_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            ChangePlaybackSpeed(1.0);
+        }
     }
 }

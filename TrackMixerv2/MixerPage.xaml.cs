@@ -1,8 +1,9 @@
-using Microsoft.UI.Dispatching;
-using Microsoft.VisualBasic.FileIO;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.VisualBasic.FileIO;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -12,16 +13,17 @@ using System.Linq;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
 using Windows.Storage;
+using Windows.System;
+using Windows.UI.Core;
 using static TrackMixerv2.MainWindow;
 using static TrackMixerv2.MixedMediaPlayer;
 using static TrackMixerv2.PlaylistHelper;
-using Microsoft.UI.Xaml.Input;
 
 namespace TrackMixerv2
 {
     public sealed partial class MixerPage : Page
     {
-        DispatcherQueue dispatcherQueue;
+        Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue;
         TabViewItem tabViewItem;
         bool initialLoaded = false;
         RangeBaseValueChangedEventHandler VolumeSliderChangedHandler;
@@ -31,7 +33,7 @@ namespace TrackMixerv2
         public MixerPage(string path)
         {
             this.InitializeComponent();
-            dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+            dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
             this.path = path;
             MixedMediaPlayer.Loaded += MixedMediaPlayer_Loaded;
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.MediaFailed += MediaPlayer_MediaFailed;
@@ -58,6 +60,59 @@ namespace TrackMixerv2
             MixedMediaPlayer.PauseAll();
         }
 
+        private static async void PlaybackKeyboardCheck(MixedMediaPlayer mixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue)
+        {
+            bool previousShiftKeyDown = IsKeyDown(VirtualKey.LeftShift);
+            bool previousControlKeyDown = IsKeyDown(VirtualKey.LeftControl);
+
+            while (true)
+            {
+                if (!MainWindow.MainWindowActivated) continue;
+
+                bool shiftKeyDown = IsKeyDown(VirtualKey.LeftShift);
+                bool controlKeyDown = IsKeyDown(VirtualKey.LeftControl);
+
+                if (shiftKeyDown != previousShiftKeyDown)
+                {
+                    dispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (IsKeyDown(VirtualKey.LeftShift))
+                        {
+                            mixedMediaPlayer.ChangePlaybackSpeed(2.0);
+                        }
+                        else if (IsKeyDown(VirtualKey.LeftControl))
+                        {
+                            mixedMediaPlayer.ChangePlaybackSpeed(0.25);
+                        }
+                        else
+                        {
+                            mixedMediaPlayer.ChangePlaybackSpeed(1.0);
+                        }
+                    });
+                    previousShiftKeyDown = shiftKeyDown;
+                }
+                if (controlKeyDown != previousControlKeyDown)
+                {
+                    dispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (IsKeyDown(VirtualKey.LeftControl))
+                        {
+                            mixedMediaPlayer.ChangePlaybackSpeed(0.25);
+                        }
+                        else if (IsKeyDown(VirtualKey.LeftShift))
+                        {
+                            mixedMediaPlayer.ChangePlaybackSpeed(2.0);
+                        }
+                        else
+                        {
+                            mixedMediaPlayer.ChangePlaybackSpeed(1.0);
+                        }
+                    });
+                    previousControlKeyDown = controlKeyDown;
+                }
+                await Task.Delay(10);
+            }
+        }
         private void DeleteVideoConfirmation_Click(object sender, RoutedEventArgs e)
         {
             switch (MixedMediaPlayer.AutoplayMode)
@@ -94,8 +149,6 @@ namespace TrackMixerv2
             MixedMediaPlayer.PlayAll();
             DeleteConfirmationFlyout.Hide();
         }
-
-
         private void PlaylistSubfolderToggle_Click(object sender, RoutedEventArgs e)
         {
             MixedMediaPlayer.PlaylistConfig.SubfolderOnly = PlaylistSubfolderToggle.IsChecked.GetValueOrDefault();
@@ -103,7 +156,7 @@ namespace TrackMixerv2
 
         private void PlaylistFilterTimeUnit_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            MixedMediaPlayer.PlaylistConfig.TimeSpan = TimeSpanFromUnitValue((TimeUnit)PlaylistFilterTimeUnit.SelectedIndex,PlaylistFilterTimeValue.Value );
+            MixedMediaPlayer.PlaylistConfig.TimeSpan = TimeSpanFromUnitValue((TimeUnit)PlaylistFilterTimeUnit.SelectedIndex, PlaylistFilterTimeValue.Value);
         }
 
         private void PlaylistFilterTimeValue_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -134,7 +187,7 @@ namespace TrackMixerv2
             }
         }
 
-        public void OpenNewMedia (string path)
+        public void OpenNewMedia(string path)
         {
             this.path = path;
             MixedMediaPlayer.Dispose();
@@ -148,6 +201,8 @@ namespace TrackMixerv2
 
         private void MixedMediaPlayer_Loaded(object sender, RoutedEventArgs e)
         {
+            Action<MixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue> playbackKeyboardCheck = PlaybackKeyboardCheck;
+            Task.Run(() => playbackKeyboardCheck(MixedMediaPlayer, dispatcherQueue));
             dispatcherQueue.TryEnqueue(() =>
             {
                 if (initialLoaded) return;
@@ -156,7 +211,7 @@ namespace TrackMixerv2
                 MixedMediaPlayer.OpenMediaAsync(path);
                 MixedMediaPlayer.MediaLoaded += MixedMediaPlayer_MediaLoaded;
                 MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
-                
+
                 // Load settings
                 if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropOnNewTab"))
                 {
@@ -236,7 +291,7 @@ namespace TrackMixerv2
                         if (trackName.Text == "")
                             trackName.Text = "Volume";
                     }
-                    catch(Exception)
+                    catch (Exception)
                     {
                         trackName.Text = i.ToString();
                     }
@@ -333,7 +388,7 @@ namespace TrackMixerv2
 
         private double GetSavedSliderValue(int index)
         {
-            if(index < CachedSliderValues.Count)
+            if (index < CachedSliderValues.Count)
                 return CachedSliderValues[index];
             else
             {
@@ -369,6 +424,12 @@ namespace TrackMixerv2
         private void Left_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
         {
             MixedMediaPlayer.Rewind(5000);
+        }
+        static bool IsKeyDown(VirtualKey key)
+        {
+            return InputKeyboardSource
+                .GetKeyStateForCurrentThread(key)
+                .HasFlag(CoreVirtualKeyStates.Down);
         }
     }
 }

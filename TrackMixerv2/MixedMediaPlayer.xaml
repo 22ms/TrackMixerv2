@@ -18,7 +18,7 @@
     </Page.Resources>
 
     <Grid>
-        <MediaPlayerElement x:Name="MainMediaPlayer" x:FieldModifier="public" AllowDrop="True"
+        <MediaPlayerElement x:Name="MainMediaPlayer" x:FieldModifier="public" AllowDrop="True" PointerPressed="MainMediaPlayer_PointerPressed" PointerReleased="MainMediaPlayer_PointerReleased"
         AutoPlay="True"
         AreTransportControlsEnabled="True"
         Stretch="Uniform" CanDrag="True">
@@ -26,7 +26,12 @@
                 <local:MixedMediaPlayerControl x:Name="myMixedMediaPlayerControl" x:FieldModifier="public"
                                                IsNextTrackButtonVisible="True"
                                                IsPreviousTrackButtonVisible="True"
+                                               IsPlaybackRateEnabled="True"
+                                               IsPlaybackRateButtonVisible="True"
                                                IsCompact="False"
+                                               IsZoomButtonVisible="False"
+                                               IsZoomEnabled="False"
+                                               
                                         Style="{StaticResource myTransportControlsStyle}"
                                                >
                 </local:MixedMediaPlayerControl>

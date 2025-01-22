@@ -8,7 +8,6 @@ using Microsoft.UI.Xaml.Media;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -43,6 +42,7 @@ namespace TrackMixerv2
         public static List<string> ROOT_FOLDERS;
         public static Dictionary<string, TrackMetadata> TRACK_METADATA = new Dictionary<string, TrackMetadata>();
         private string[] launchFiles = null;
+        public static bool MainWindowActivated;
 
         public MainWindow(string[] files)
         {
@@ -77,6 +77,13 @@ namespace TrackMixerv2
             WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
             var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.SetIcon(Path.Combine(Package.Current.InstalledLocation.Path, @"\Assets\video.ico"));
+
+            this.Activated += (sender, args) =>
+            {
+                MainWindowActivated =
+                    args.WindowActivationState == WindowActivationState.CodeActivated ||
+                    args.WindowActivationState == WindowActivationState.PointerActivated;
+            };
         }
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -122,11 +129,20 @@ namespace TrackMixerv2
             DisableTabStops(TabView);
             ROOT_FOLDERS = new List<string>();
             string env = Environment.GetEnvironmentVariable(TM_ENV_NAME);
-            if(env != null)
+            if (env != null)
                 ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
-            if(launchFiles == null) // TODO: put the following inside of a new method, since redundant
+            if (launchFiles == null) // TODO: put the following inside of a new method, since repeating, will never happen:d
             {
-                TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
+                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("RecentVideo"))
+                {
+                    // TODO support tabs
+                    string recentVideo = (string)ApplicationData.Current.LocalSettings.Values["RecentVideo"];
+                    AddNewTabs(new[] { recentVideo });
+                }
+                else
+                {
+                    TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
+                }
             }
             else
             {
@@ -143,7 +159,7 @@ namespace TrackMixerv2
 
         public async Task AddNewRootFolder()
         {
-            if(ROOT_FOLDERS == null)
+            if (ROOT_FOLDERS == null)
                 ROOT_FOLDERS = new List<string>();
             string newFolder = await PickFolderDialog();
             if (newFolder == null) return;
@@ -151,9 +167,9 @@ namespace TrackMixerv2
             Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
         }
 
-        public static string RootFoldersContainFile (string path)
+        public static string RootFoldersContainFile(string path)
         {
-            if(ROOT_FOLDERS == null) return null;
+            if (ROOT_FOLDERS == null) return null;
             foreach (var folder in ROOT_FOLDERS)
             {
                 if (path.StartsWith(folder))
@@ -196,7 +212,7 @@ namespace TrackMixerv2
             // Associate the HWND with the file picker
             WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hWnd);
             var result = await folderPicker.PickSingleFolderAsync();
-            if(result == null) return null;
+            if (result == null) return null;
             return result.Path;
         }
 
@@ -347,8 +363,8 @@ namespace TrackMixerv2
 
         private void NextTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
         {
-            if(TabView.TabItems.Count > TabView.SelectedIndex + 1)
-                TabView.SelectedItem = TabView.TabItems[TabView.SelectedIndex+1];
+            if (TabView.TabItems.Count > TabView.SelectedIndex + 1)
+                TabView.SelectedItem = TabView.TabItems[TabView.SelectedIndex + 1];
             args.Handled = true;
         }
 
@@ -387,7 +403,7 @@ namespace TrackMixerv2
 
                     if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropOnNewTab"))
                     {
-                        AddNewTabs(videoFilePaths.ToArray(), (bool) ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"]);
+                        AddNewTabs(videoFilePaths.ToArray(), (bool)ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"]);
                     }
                     else
                     {

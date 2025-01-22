@@ -356,6 +356,7 @@
                                         <Slider x:Name="ProgressSlider"
                                                 Margin="7,2,7,1"
                                                 MinWidth="80"
+                                                StepFrequency="10"
                                                 Height="{ThemeResource MediaTransportControlsSliderHeight}"
                                                 VerticalAlignment="Center"
                                                 IsThumbToolTipEnabled="False" />
@@ -495,6 +496,7 @@
                                                     <FontIcon Glyph="?" />
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
+                                            <AppBarSeparator Height="0" Width="30" />
                                             <AppBarButton x:Name="PreviousTrackButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
                                                           MediaTransportControlsHelper.DropoutOrder="3"
@@ -508,7 +510,7 @@
                                                           MediaTransportControlsHelper.DropoutOrder="1"
                                                           Visibility="Collapsed">
                                                 <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
+                                                    <FontIcon Glyph="&#xEB9E;" />
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
                                             <AppBarButton x:Name="PlayPauseButton"
@@ -541,15 +543,15 @@
                                                           MediaTransportControlsHelper.DropoutOrder="5"
                                                           Visibility="Collapsed">
                                                 <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
+                                                    <FontIcon Glyph="&#xEB9D;" />
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
                                             <AppBarButton x:Name="PlaybackRateButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
                                                           MediaTransportControlsHelper.DropoutOrder="10"
-                                                          Visibility="Collapsed">
+                                                          Visibility="Visible">
                                                 <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
+                                                    <FontIcon Glyph="&#xEC58;" />
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
                                             <AppBarSeparator x:Name="RightSeparator"

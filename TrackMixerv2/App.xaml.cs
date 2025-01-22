@@ -1,11 +1,8 @@
 ﻿using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.Windows.AppLifecycle;
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using Windows.ApplicationModel.Activation;
 using Windows.Storage;
@@ -36,7 +33,7 @@ namespace TrackMixerv2
             var activatedEventArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
             if (!mainInstance.IsCurrent)
             {
-                await mainInstance.RedirectActivationToAsync(activatedEventArgs); 
+                await mainInstance.RedirectActivationToAsync(activatedEventArgs);
                 Process.GetCurrentProcess().Kill();
                 return;
             }

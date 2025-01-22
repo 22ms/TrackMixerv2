@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Windows.Devices.Bluetooth.Advertisement;
 
 namespace TrackMixerv2
 {
@@ -89,7 +86,7 @@ namespace TrackMixerv2
             Previous
         }
 
-        public static string IsInRatings (PlaylistConfig playlistConfig, string currentFile) // NULL MEANS YES!
+        public static string IsInRatings(PlaylistConfig playlistConfig, string currentFile) // NULL MEANS YES!
         {
             if (currentFile == null || playlistConfig == null) return null;
             string rootFolder = playlistConfig.SubfolderOnly ? Path.GetDirectoryName(currentFile) : MainWindow.RootFoldersContainFile(currentFile);
@@ -102,7 +99,7 @@ namespace TrackMixerv2
             if (sortedVideoFiles.Count <= 0) return null;
             bool ratingAboveZero = (MainWindow.TRACK_METADATA.ContainsKey(currentFile) && MainWindow.TRACK_METADATA[currentFile].Rating > 0);
             int currentIndex = sortedVideoFiles.IndexOf(currentFile);
-            if(currentIndex  != -1 && ratingAboveZero) return null;
+            if (currentIndex != -1 && ratingAboveZero) return null;
             return sortedVideoFiles[0];
         }
 
@@ -158,7 +155,7 @@ namespace TrackMixerv2
             }
         }
 
-        public static TimeSpan TimeSpanFromUnitValue (TimeUnit unit, double value)
+        public static TimeSpan TimeSpanFromUnitValue(TimeUnit unit, double value)
         {
             TimeSpan span = TimeSpan.FromDays(31);
             switch (unit)
