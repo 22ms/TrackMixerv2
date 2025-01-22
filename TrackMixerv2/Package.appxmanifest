@@ -8,15 +8,15 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="5f77168c-e2d3-4c60-9cfa-a0d1ed2c844f"
-    Publisher="CN=doppelzwei"
-    Version="2.2.2.0" />
+    Name="doppelzwei.TrackMixer"
+    Publisher="CN=634D4DD0-476A-4BC5-820B-6F97A8EFCB04"
+    Version="2.3.0.0" />
 
-  <mp:PhoneIdentity PhoneProductId="5f77168c-e2d3-4c60-9cfa-a0d1ed2c844f" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="39e27ffa-dfd7-4526-9f63-c0573e2a9467" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>Track Mixer</DisplayName>
-    <PublisherDisplayName>Aricade</PublisherDisplayName>
+    <PublisherDisplayName>doppelzwei</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
