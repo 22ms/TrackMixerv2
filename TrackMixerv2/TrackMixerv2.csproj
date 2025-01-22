@@ -21,10 +21,10 @@
 	<GenerateTestArtifacts>True</GenerateTestArtifacts>
 	<AppxBundle>Always</AppxBundle>
 	<HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
-	<PackageCertificateKeyFile>TrackMixerv2_TemporaryKey.pfx</PackageCertificateKeyFile>
 	<AppxBundlePlatforms>x86|x64</AppxBundlePlatforms>
 	<GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
 	<SupportedOSPlatformVersion>10.0.26100.0</SupportedOSPlatformVersion>
+	<PackageCertificateThumbprint>82B0B705DE867C6A9B4FD44D91AFF86A1DEF6A6F</PackageCertificateThumbprint>
 	<!--<WindowsPackageType>None</WindowsPackageType>-->
   </PropertyGroup>
   <ItemGroup>
