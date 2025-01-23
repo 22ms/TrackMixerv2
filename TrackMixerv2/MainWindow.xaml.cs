@@ -159,6 +159,16 @@ namespace TrackMixerv2
 
         public async Task AddNewRootFolder()
         {
+            ContentDialog rootFolderDialog = new ContentDialog()
+            {
+                XamlRoot = this.TabView.XamlRoot,
+                Title = "Add root folder (e.g. C:\\Users\\Mark\\Videos\\NVIDIA) for automatic playlist sorting",
+                Content = "For automatic playlist sorting to work, you need to add root folders. These are the top most folders where all of your videos are saved in (including subdirectories). As of right now, if you want to edit them, you would need to do this manually in your environment variables.",
+                CloseButtonText = "Dismiss"
+            };
+
+            await rootFolderDialog.ShowAsync();
+
             if (ROOT_FOLDERS == null)
                 ROOT_FOLDERS = new List<string>();
             string newFolder = await PickFolderDialog();
