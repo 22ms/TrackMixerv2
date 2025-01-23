@@ -29,11 +29,9 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Assets\trackmixerv2.ico" />
-    <None Remove="HomePage.xaml" />
     <None Remove="MixedMediaPlayer.xaml" />
     <None Remove="MixerPage.xaml" />
     <None Remove="Styles.xaml" />
-    <None Remove="VideoExplorer.xaml" />
     <None Update="Assets\video.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -62,22 +60,12 @@
     <ProjectCapability Include="Msix" />
   </ItemGroup>
   <ItemGroup>
-    <Page Update="HomePage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
     <Page Update="Styles.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="MixedMediaPlayer.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <Page Update="VideoExplorer.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
