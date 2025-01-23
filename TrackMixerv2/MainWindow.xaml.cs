@@ -159,11 +159,15 @@ namespace TrackMixerv2
 
         public async Task AddNewRootFolder()
         {
+            MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
+            if (page == null) return;
+            page.PauseMedia();
+
             ContentDialog rootFolderDialog = new ContentDialog()
             {
                 XamlRoot = this.TabView.XamlRoot,
-                Title = "Add root folder (e.g. C:\\Users\\Mark\\Videos\\NVIDIA) for automatic playlist sorting",
-                Content = "For automatic playlist sorting to work, you need to add root folders. These are the top most folders where all of your videos are saved in (including subdirectories). As of right now, if you want to edit them, you would need to do this manually in your environment variables.",
+                Title = "Add Root Folders (e.g., C:\\Users\\Mark\\Videos\\NVIDIA) for Automatic Playlist Sorting",
+                Content = "To enable automatic playlist sorting, please add root folders. Track Mixer will search these folders and their subdirectories to create playlists. Currently, you need to manually modify your environment variables to edit the root folders.",
                 CloseButtonText = "Dismiss"
             };
 
@@ -175,6 +179,8 @@ namespace TrackMixerv2
             if (newFolder == null) return;
             ROOT_FOLDERS.Add(newFolder);
             Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
+
+            page.PlayMedia();
         }
 
         public static string RootFoldersContainFile(string path)
