@@ -44,6 +44,7 @@ namespace TrackMixerv2
         public static Dictionary<string, TrackMetadata> TRACK_METADATA = new Dictionary<string, TrackMetadata>();
         private string[] launchFiles = null;
         public static bool MainWindowActivated;
+        private static string tempFilesRecordPath = Path.Combine(Path.GetTempPath(), "TrackMixerTempFiles.txt");
 
         public MainWindow(string[] files)
         {
@@ -55,6 +56,7 @@ namespace TrackMixerv2
             }
             if (!File.Exists(TRACK_METADATA_JSON))
                 File.WriteAllText(TRACK_METADATA_JSON, "");
+            CleanupTemporaryFiles();
             //File.WriteAllText(TRACK_METADATA_JSON, "");
             TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(TRACK_METADATA_JSON));
             if (TRACK_METADATA == null)
@@ -469,6 +471,29 @@ namespace TrackMixerv2
                     }
             }
         }
+        private void CleanupTemporaryFiles()
+        {
+            if (File.Exists(tempFilesRecordPath))
+            {
+                var files = File.ReadAllLines(tempFilesRecordPath);
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        if (File.Exists(file))
+                        {
+                            File.Delete(file);
+                        }
+                    }
+                    catch
+                    {
+                        // Handle exceptions if needed
+                    }
+                }
+                File.Delete(tempFilesRecordPath);
+            }
+        }
+
         private async Task ExportCurrentFileAsync()
         {
             MixerPage page = (TabView.SelectedItem as TabViewItem)?.Content as MixerPage;
@@ -678,31 +703,17 @@ namespace TrackMixerv2
 
                 if (clipboardOnly)
                 {
-                    // Use a temporary file
                     string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
+
+                    // Record the temp file path
+                    File.AppendAllLines(tempFilesRecordPath, new[] { tempPath });
+
                     conversion.SetOutput(tempPath);
                     conversion.SetOverwriteOutput(true);
 
                     await conversion.Start();
 
                     await CopyFileToClipboardAsync(tempPath);
-
-                    // Optionally delete the temporary file after a delay
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(TimeSpan.FromMinutes(10)); // Wait for 10 minutes before deleting
-                        try
-                        {
-                            if (File.Exists(tempPath))
-                            {
-                                File.Delete(tempPath);
-                            }
-                        }
-                        catch
-                        {
-                            // Handle exceptions if needed
-                        }
-                    });
 
                     await new ContentDialog
                     {
