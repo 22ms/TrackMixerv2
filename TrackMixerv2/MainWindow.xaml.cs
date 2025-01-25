@@ -17,6 +17,7 @@ using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.UI;
+using Xabe.FFmpeg;
 
 namespace TrackMixerv2
 {
@@ -137,7 +138,10 @@ namespace TrackMixerv2
                 {
                     // TODO support tabs
                     string recentVideo = (string)ApplicationData.Current.LocalSettings.Values["RecentVideo"];
-                    AddNewTabs(new[] { recentVideo });
+                    if (File.Exists(recentVideo))
+                        AddNewTabs(new[] { recentVideo });
+                    else
+                        TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
                 }
                 else
                 {
@@ -254,6 +258,7 @@ namespace TrackMixerv2
                     page.Drop += MixedMediaPlayer_Drop;
                     page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
                     page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+                    page.ExportFlyout.Click += MenuFlyoutItem_Click;
                     newTab.Content = page;
 
                     Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
@@ -290,6 +295,7 @@ namespace TrackMixerv2
                     page.Drop += MixedMediaPlayer_Drop;
                     page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
                     page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+                    page.ExportFlyout.Click += MenuFlyoutItem_Click;
                     newTab.Content = page;
 
                     Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
@@ -315,6 +321,7 @@ namespace TrackMixerv2
                     page.Drop += MixedMediaPlayer_Drop;
                     page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
                     page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+                    page.ExportFlyout.Click += MenuFlyoutItem_Click;
                     newTab.Content = page;
 
                     Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
@@ -354,6 +361,7 @@ namespace TrackMixerv2
                 page.Drop -= MixedMediaPlayer_Drop;
                 page.OpenFileFlyout.Click -= MenuFlyoutItem_Click;
                 page.AddRootFlyout.Click -= MenuFlyoutItem_Click;
+                page.ExportFlyout.Click -= MenuFlyoutItem_Click;
                 page.Dispose(); // possible memory leak
             }
             sender.TabItems.Remove(args.Tab);
@@ -434,24 +442,110 @@ namespace TrackMixerv2
             if (item == null) return;
             switch (item.Tag)
             {
-                case "file":
-                    MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
-                    if (page == null) return;
-                    page.PauseMedia();
-                    IReadOnlyList<StorageFile> files = await OpenFilesDialog();
-                    if (files.Count <= 0)
+                case "openFile":
                     {
-                        page.PlayMedia();
-                        return;
+                        MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
+                        if (page == null) return;
+                        page.PauseMedia();
+                        IReadOnlyList<StorageFile> files = await OpenFilesDialog();
+                        if (files.Count <= 0)
+                        {
+                            page.PlayMedia();
+                            return;
+                        }
+                        string file = files.First().Path;
+                        page.OpenNewMedia(file);
+                        break;
                     }
-                    string file = files.First().Path;
-                    page.OpenNewMedia(file);
-                    break;
-                case "folder":
-                    await AddNewRootFolder();
-                    break;
+                case "addRootFolder":
+                    {
+                        await AddNewRootFolder();
+                        break;
+                    }
+                case "exportFile":
+                    {
+                        await ExportCurrentFileAsync();
+                        break;
+                    }
             }
         }
+        private async Task ExportCurrentFileAsync()
+        {
+            MixerPage page = (TabView.SelectedItem as TabViewItem)?.Content as MixerPage;
+            if (page == null) return;
+            page.PauseMedia();
+
+            double[] levels = page.GetVolumeLevels();
+            string inputPath = page.GetCurrentPath();
+
+            // Ask the user where to save the file. Append _MIXED to the filename.
+            var savePicker = new FileSavePicker();
+            savePicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
+            savePicker.FileTypeChoices.Add("Video Files", new List<string> { Path.GetExtension(inputPath) });
+            savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(inputPath)}_MIXED{Path.GetExtension(inputPath)}";
+
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+
+            var outputFile = await savePicker.PickSaveFileAsync();
+
+            if (outputFile == null)
+            {
+                page.PlayMedia();
+                return;
+            }
+
+            string outputPath = outputFile.Path;
+
+            // Get media info
+            var mediaInfo = await FFmpeg.GetMediaInfo(inputPath);
+
+            var videoStream = mediaInfo.VideoStreams.FirstOrDefault();
+            var audioStreams = mediaInfo.AudioStreams.ToList();
+
+            // Build the filter_complex parameter
+            var filterParts = new List<string>();
+            for (int i = 0; i < audioStreams.Count; i++)
+            {
+                filterParts.Add($"[0:a:{i}]volume={levels[i]}[a{i}]");
+            }
+            string filterComplex = string.Join(";", filterParts);
+            string audioInputs = string.Join("", Enumerable.Range(0, audioStreams.Count).Select(i => $"[a{i}]"));
+            filterComplex += $";{audioInputs}amix=inputs={audioStreams.Count}[mixedaudio]";
+
+            // Create the conversion
+            var conversion = FFmpeg.Conversions.New()
+                .AddParameter($"-i \"{inputPath}\"")
+                .AddParameter($"-filter_complex \"{filterComplex}\"")
+                .AddParameter("-map 0:v")
+                .AddParameter("-map \"[mixedaudio]\"")
+                .AddParameter("-c:v copy")
+                .AddParameter("-c:a aac")
+                .SetOutput(outputPath)
+                .SetOverwriteOutput(true);
+
+            await conversion.Start();
+
+            await CopyFileToClipboardAsync(outputPath);
+
+            await new ContentDialog
+            {
+                Title = "File successfully exported and copied to clipboard!",
+                CloseButtonText = "OK",
+                XamlRoot = this.Content.XamlRoot
+            }.ShowAsync();
+
+            page.PlayMedia();
+        }
+
+        private async Task CopyFileToClipboardAsync(string filePath)
+        {
+            var storageFile = await StorageFile.GetFileFromPathAsync(filePath);
+            var dataPackage = new DataPackage();
+            dataPackage.SetStorageItems(new List<StorageFile> { storageFile });
+            Clipboard.SetContent(dataPackage);
+        }
+
         public static void DisableTabStops(DependencyObject root)
         {
             if (root == null) return;

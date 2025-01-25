@@ -312,6 +312,14 @@ namespace TrackMixerv2
                 }
             });
         }
+        public double[] GetVolumeLevels()
+        {
+            return VolumeSliders.Select(slider => slider.Value).ToArray();
+        }
+        public string GetCurrentPath()
+        {
+            return path;
+        }
 
         public void Dispose()
         {

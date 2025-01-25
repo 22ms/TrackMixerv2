@@ -31,8 +31,9 @@
         </Grid.ColumnDefinitions>-->
         <MenuBar Grid.Row="0" Grid.Column="0">
             <MenuBarItem Title="File">
-                <MenuFlyoutItem x:FieldModifier="public" x:Name="OpenFileFlyout" Text="Open..." Tag="file" />
-                <MenuFlyoutItem x:FieldModifier="public" x:Name="AddRootFlyout" Text="Add root folder" Tag="folder"/>
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="OpenFileFlyout" Text="Open..." Tag="openFile" />
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="AddRootFlyout" Text="Add root folder" Tag="addRootFolder"/>
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="ExportFlyout" Text="Export current file..." Tag="exportFile"/>
             </MenuBarItem>
             <MenuBarItem Title="Edit">
                 <MenuFlyoutItem Text="Preferences" Click="Preferences_Click"/>
