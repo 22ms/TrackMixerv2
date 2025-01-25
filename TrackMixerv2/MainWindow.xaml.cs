@@ -705,6 +705,7 @@ namespace TrackMixerv2
                 {
                     string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
 
+                    CleanupTemporaryFiles();
                     // Record the temp file path
                     File.AppendAllLines(tempFilesRecordPath, new[] { tempPath });
 
