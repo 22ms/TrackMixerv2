@@ -510,12 +510,30 @@ namespace TrackMixerv2
                 Width = 30
             };
 
-            var exportPathPanel = new StackPanel
+            // Use a Grid to better control layout
+            var exportPathGrid = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Children = { new TextBlock { Text = "Export path:", Margin = new Thickness(0, 0, 5, 0) }, exportPathTextBox, exportPathButton },
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Label
+            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // TextBox
+            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Button
+
+            var exportPathLabel = new TextBlock
+            {
+                Text = "Export path:",
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            exportPathGrid.Children.Add(exportPathLabel);
+            Grid.SetColumn(exportPathLabel, 0);
+
+            exportPathGrid.Children.Add(exportPathTextBox);
+            Grid.SetColumn(exportPathTextBox, 1);
+
+            exportPathGrid.Children.Add(exportPathButton);
+            Grid.SetColumn(exportPathButton, 2);
 
             var startTextBox = new TextBox
             {
@@ -545,7 +563,7 @@ namespace TrackMixerv2
 
             var contentPanel = new StackPanel();
             contentPanel.Children.Add(clipboardOnlyCheckBox);
-            contentPanel.Children.Add(exportPathPanel);
+            contentPanel.Children.Add(exportPathGrid);
             contentPanel.Children.Add(timePanel);
 
             dialog.Content = contentPanel;
@@ -632,7 +650,6 @@ namespace TrackMixerv2
 
                 // Get media info
                 var mediaInfo = await FFmpeg.GetMediaInfo(inputPath);
-                var videoStream = mediaInfo.VideoStreams.FirstOrDefault();
                 var audioStreams = mediaInfo.AudioStreams.ToList();
 
                 // Build filter_complex parameter
@@ -661,6 +678,7 @@ namespace TrackMixerv2
 
                 if (clipboardOnly)
                 {
+                    // Use a temporary file
                     string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
                     conversion.SetOutput(tempPath);
                     conversion.SetOverwriteOutput(true);
@@ -669,8 +687,22 @@ namespace TrackMixerv2
 
                     await CopyFileToClipboardAsync(tempPath);
 
-                    // Optional: Delete temporary file after copying
-                    File.Delete(tempPath);
+                    // Optionally delete the temporary file after a delay
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(TimeSpan.FromMinutes(10)); // Wait for 10 minutes before deleting
+                        try
+                        {
+                            if (File.Exists(tempPath))
+                            {
+                                File.Delete(tempPath);
+                            }
+                        }
+                        catch
+                        {
+                            // Handle exceptions if needed
+                        }
+                    });
 
                     await new ContentDialog
                     {
