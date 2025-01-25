@@ -472,69 +472,232 @@ namespace TrackMixerv2
         private async Task ExportCurrentFileAsync()
         {
             MixerPage page = (TabView.SelectedItem as TabViewItem)?.Content as MixerPage;
-            if (page == null) return;
+            if (page == null)
+                return;
+
             page.PauseMedia();
 
             double[] levels = page.GetVolumeLevels();
-            double[] normaledLevels = levels.Select(l => l / 100.0).ToArray();
+            double[] normalizedLevels = levels.Select(l => l / 100.0).ToArray();
             string inputPath = page.GetCurrentPath();
 
-            // Ask the user where to save the file. Append _MIXED to the filename.
-            var savePicker = new FileSavePicker();
-            savePicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
-            savePicker.FileTypeChoices.Add("Video Files", new List<string> { Path.GetExtension(inputPath) });
-            savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(inputPath)}_MIXED{Path.GetExtension(inputPath)}";
-
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
-
-            var outputFile = await savePicker.PickSaveFileAsync();
-
-            if (outputFile == null)
+            // Create a ContentDialog with the required UI elements
+            var dialog = new ContentDialog
             {
-                page.PlayMedia();
-                return;
-            }
-
-            string outputPath = outputFile.Path;
-
-            // Get media info
-            var mediaInfo = await FFmpeg.GetMediaInfo(inputPath);
-
-            var videoStream = mediaInfo.VideoStreams.FirstOrDefault();
-            var audioStreams = mediaInfo.AudioStreams.ToList();
-
-            // Build the filter_complex parameter
-            var filterParts = new List<string>();
-            for (int i = 0; i < audioStreams.Count; i++)
-            {
-                filterParts.Add($"[0:a:{i}]volume={normaledLevels[i].ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}[a{i}]");
-            }
-            string filterComplex = string.Join(";", filterParts);
-            string audioInputs = string.Join("", Enumerable.Range(0, audioStreams.Count).Select(i => $"[a{i}]"));
-            filterComplex += $";{audioInputs}amix=inputs={audioStreams.Count}[mixedaudio]";
-
-            // Create the conversion
-            var conversion = FFmpeg.Conversions.New()
-                .AddParameter($"-i \"{inputPath}\"")
-                .AddParameter($"-filter_complex \"{filterComplex}\"")
-                .AddParameter("-map 0:v")
-                .AddParameter("-map \"[mixedaudio]\"")
-                .AddParameter("-c:v copy")
-                .AddParameter("-c:a aac")
-                .SetOutput(outputPath)
-                .SetOverwriteOutput(true);
-
-            await conversion.Start();
-
-            await CopyFileToClipboardAsync(outputPath);
-
-            await new ContentDialog
-            {
-                Title = "File successfully exported and copied to clipboard!",
-                CloseButtonText = "OK",
+                Title = "Export Options",
+                PrimaryButtonText = "Export",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = this.Content.XamlRoot
-            }.ShowAsync();
+            };
+
+            // Create UI controls
+            var clipboardOnlyCheckBox = new CheckBox
+            {
+                Content = "Clipboard only",
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+
+            var exportPathTextBox = new TextBox
+            {
+                IsReadOnly = true,
+                Margin = new Thickness(0, 0, 5, 0)
+            };
+
+            var exportPathButton = new Button
+            {
+                Content = "...",
+                Width = 30
+            };
+
+            var exportPathPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children = { new TextBlock { Text = "Export path:", Margin = new Thickness(0, 0, 5, 0) }, exportPathTextBox, exportPathButton },
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+
+            var startTextBox = new TextBox
+            {
+                PlaceholderText = "Start time (e.g., 00:00:00)",
+                Width = 150,
+                Margin = new Thickness(5, 0, 0, 0)
+            };
+
+            var endTextBox = new TextBox
+            {
+                PlaceholderText = "End time (e.g., 00:00:10)",
+                Width = 150,
+                Margin = new Thickness(5, 0, 0, 0)
+            };
+
+            var timePanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children =
+        {
+            new TextBlock { Text = "Start:", VerticalAlignment = VerticalAlignment.Center },
+            startTextBox,
+            new TextBlock { Text = "End:", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center },
+            endTextBox
+        }
+            };
+
+            var contentPanel = new StackPanel();
+            contentPanel.Children.Add(clipboardOnlyCheckBox);
+            contentPanel.Children.Add(exportPathPanel);
+            contentPanel.Children.Add(timePanel);
+
+            dialog.Content = contentPanel;
+
+            // Event handlers
+            clipboardOnlyCheckBox.Checked += (s, e) =>
+            {
+                exportPathTextBox.IsEnabled = false;
+                exportPathButton.IsEnabled = false;
+            };
+            clipboardOnlyCheckBox.Unchecked += (s, e) =>
+            {
+                exportPathTextBox.IsEnabled = true;
+                exportPathButton.IsEnabled = true;
+            };
+
+            exportPathButton.Click += async (s, e) =>
+            {
+                var savePicker = new FileSavePicker();
+                savePicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
+                savePicker.FileTypeChoices.Add("Video Files", new List<string> { Path.GetExtension(inputPath) });
+                savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(inputPath)}_MIXED{Path.GetExtension(inputPath)}";
+
+                var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+
+                var outputFile = await savePicker.PickSaveFileAsync();
+                if (outputFile != null)
+                {
+                    exportPathTextBox.Text = outputFile.Path;
+                }
+            };
+
+            var result = await dialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                bool clipboardOnly = clipboardOnlyCheckBox.IsChecked == true;
+                string outputPath = exportPathTextBox.Text;
+
+                if (!clipboardOnly && string.IsNullOrEmpty(outputPath))
+                {
+                    await new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "Please specify an export path or select 'Clipboard only'.",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    }.ShowAsync();
+                    page.PlayMedia();
+                    return;
+                }
+
+                TimeSpan startTime = TimeSpan.Zero;
+                TimeSpan endTime = TimeSpan.Zero;
+                bool hasStartTime = !string.IsNullOrWhiteSpace(startTextBox.Text);
+                bool hasEndTime = !string.IsNullOrWhiteSpace(endTextBox.Text);
+
+                try
+                {
+                    if (hasStartTime)
+                        startTime = TimeSpan.Parse(startTextBox.Text);
+
+                    if (hasEndTime)
+                        endTime = TimeSpan.Parse(endTextBox.Text);
+
+                    if (hasStartTime && hasEndTime && startTime >= endTime)
+                    {
+                        throw new Exception("Start time must be less than end time.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await new ContentDialog
+                    {
+                        Title = "Invalid Time",
+                        Content = $"Error parsing start or end time: {ex.Message}",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    }.ShowAsync();
+                    page.PlayMedia();
+                    return;
+                }
+
+                // Get media info
+                var mediaInfo = await FFmpeg.GetMediaInfo(inputPath);
+                var videoStream = mediaInfo.VideoStreams.FirstOrDefault();
+                var audioStreams = mediaInfo.AudioStreams.ToList();
+
+                // Build filter_complex parameter
+                var filterParts = new List<string>();
+                for (int i = 0; i < audioStreams.Count; i++)
+                {
+                    filterParts.Add($"[0:a:{i}]volume={normalizedLevels[i].ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}[a{i}]");
+                }
+                string filterComplex = string.Join(";", filterParts);
+                string audioInputs = string.Join("", Enumerable.Range(0, audioStreams.Count).Select(i => $"[a{i}]"));
+                filterComplex += $";{audioInputs}amix=inputs={audioStreams.Count}[mixedaudio]";
+
+                var conversion = FFmpeg.Conversions.New()
+                    .AddParameter($"-i \"{inputPath}\"")
+                    .AddParameter($"-filter_complex \"{filterComplex}\"")
+                    .AddParameter("-map [mixedaudio]")
+                    .AddParameter("-map 0:v")
+                    .AddParameter("-c:v copy")
+                    .AddParameter("-c:a aac");
+
+                if (hasStartTime)
+                    conversion.AddParameter($"-ss {startTime}");
+
+                if (hasEndTime)
+                    conversion.AddParameter($"-to {endTime}");
+
+                if (clipboardOnly)
+                {
+                    string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
+                    conversion.SetOutput(tempPath);
+                    conversion.SetOverwriteOutput(true);
+
+                    await conversion.Start();
+
+                    await CopyFileToClipboardAsync(tempPath);
+
+                    // Optional: Delete temporary file after copying
+                    File.Delete(tempPath);
+
+                    await new ContentDialog
+                    {
+                        Title = "Success",
+                        Content = "File exported to clipboard successfully!",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    }.ShowAsync();
+                }
+                else
+                {
+                    conversion.SetOutput(outputPath);
+                    conversion.SetOverwriteOutput(true);
+
+                    await conversion.Start();
+
+                    await CopyFileToClipboardAsync(outputPath);
+
+                    await new ContentDialog
+                    {
+                        Title = "Success",
+                        Content = "File exported and copied to clipboard successfully!",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    }.ShowAsync();
+                }
+            }
 
             page.PlayMedia();
         }
