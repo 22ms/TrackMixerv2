@@ -562,14 +562,14 @@ namespace TrackMixerv2
 
             var startTextBox = new TextBox
             {
-                PlaceholderText = "Start time (e.g., 00:00:00)",
+                PlaceholderText = "00:00:00",
                 Width = 150,
                 Margin = new Thickness(5, 0, 0, 0)
             };
 
             var endTextBox = new TextBox
             {
-                PlaceholderText = "End time (e.g., 00:00:10)",
+                PlaceholderText = "00:00:30",
                 Width = 150,
                 Margin = new Thickness(5, 0, 0, 0)
             };
@@ -650,10 +650,10 @@ namespace TrackMixerv2
                 try
                 {
                     if (hasStartTime)
-                        startTime = TimeSpan.Parse(startTextBox.Text);
+                        startTime = ParseTimeInput(startTextBox.Text);
 
                     if (hasEndTime)
-                        endTime = TimeSpan.Parse(endTextBox.Text);
+                        endTime = ParseTimeInput(endTextBox.Text);
 
                     if (hasStartTime && hasEndTime && startTime >= endTime)
                     {
@@ -743,6 +743,33 @@ namespace TrackMixerv2
             }
 
             page.PlayMedia();
+        }
+
+        private TimeSpan ParseTimeInput(string input)
+        {
+            input = input.Trim();
+
+            if (string.IsNullOrEmpty(input))
+                throw new FormatException("Time input is empty");
+
+            // If input is digits only, assume seconds
+            if (double.TryParse(input, out double seconds))
+            {
+                return TimeSpan.FromSeconds(seconds);
+            }
+
+            // Handle MM:SS format
+            if (input.Count(c => c == ':') == 1)
+            {
+                input = "00:" + input;
+            }
+
+            if (TimeSpan.TryParse(input, out TimeSpan result))
+            {
+                return result;
+            }
+
+            throw new FormatException("Invalid time format. Use SS, MM:SS, or HH:MM:SS.");
         }
 
         private async Task CopyFileToClipboardAsync(string filePath)
