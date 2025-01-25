@@ -476,6 +476,7 @@ namespace TrackMixerv2
             page.PauseMedia();
 
             double[] levels = page.GetVolumeLevels();
+            double[] normaledLevels = levels.Select(l => l / 100.0).ToArray();
             string inputPath = page.GetCurrentPath();
 
             // Ask the user where to save the file. Append _MIXED to the filename.
@@ -507,7 +508,7 @@ namespace TrackMixerv2
             var filterParts = new List<string>();
             for (int i = 0; i < audioStreams.Count; i++)
             {
-                filterParts.Add($"[0:a:{i}]volume={levels[i]}[a{i}]");
+                filterParts.Add($"[0:a:{i}]volume={normaledLevels[i].ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}[a{i}]");
             }
             string filterComplex = string.Join(";", filterParts);
             string audioInputs = string.Join("", Enumerable.Range(0, audioStreams.Count).Select(i => $"[a{i}]"));
