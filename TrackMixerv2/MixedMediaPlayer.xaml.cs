@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Media;
@@ -289,9 +290,9 @@ namespace TrackMixerv2
             }
         }
 
-        public void PlayNextTrack()
+        public async void PlayNextTrack()
         {
-            string nextVideo = GetTrack(PlaylistConfig, currentVideo, Direction.Next);
+            string nextVideo = await GetTrack(PlaylistConfig, currentVideo, Direction.Next);
             if (nextVideo == null) return;
 
             dispatcherQueue.TryEnqueue(() =>
@@ -300,15 +301,24 @@ namespace TrackMixerv2
             });
         }
 
-        public void PlayPreviousTrack()
+        public async void PlayPreviousTrack()
         {
-            string previousVideo = GetTrack(PlaylistConfig, currentVideo, Direction.Previous);
+            string previousVideo = await GetTrack(PlaylistConfig, currentVideo, Direction.Previous);
             if (previousVideo == null) return;
 
             dispatcherQueue.TryEnqueue(() =>
             {
                 OpenMediaAsync(previousVideo);
             });
+        }
+
+        private async Task<bool> VerifyRootFolders()
+        {
+            if (MainWindow.ROOT_FOLDERS == null || MainWindow.ROOT_FOLDERS.Count == 0)
+            {
+                return await MainWindow.Instance.AddNewRootFolder();
+            }
+            return true;
         }
 
         public void PlayAll()

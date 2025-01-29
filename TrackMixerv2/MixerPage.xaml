@@ -53,7 +53,7 @@
             <TextBlock Margin="0, 10, 0, 10" x:Name="VideoTitle" Text="No clip selected" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center" TextAlignment="Center"/>
         </Border>
         <Border Grid.Column="1" Grid.Row="2">
-            <local:MixedMediaPlayer x:Name="MixedMediaPlayer"/>
+            <local:MixedMediaPlayer x:FieldModifier="public" x:Name="MixedMediaPlayer"/>
         </Border>
         <Grid BorderThickness="0, 1, 0, 0" BorderBrush="{ThemeResource DividerStrokeColorDefault}" Grid.Column="1" Grid.Row="3" Padding="20, 20, 20, 20" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
             <Grid.ColumnDefinitions>

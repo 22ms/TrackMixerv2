@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace TrackMixerv2
 {
@@ -103,8 +104,14 @@ namespace TrackMixerv2
             return sortedVideoFiles[0];
         }
 
-        public static string GetTrack(PlaylistConfig playlistConfig, string currentFile, Direction direction)
+        public static async Task<string> GetTrack(PlaylistConfig playlistConfig, string currentFile, Direction direction)
         {
+            if (MainWindow.ROOT_FOLDERS == null || MainWindow.ROOT_FOLDERS.Count == 0)
+            {
+                bool success = await MainWindow.Instance.AddNewRootFolder();
+                if (!success) return null;
+            }
+
             if (currentFile == null || playlistConfig == null) return null;
 
             string rootFolder = playlistConfig.SubfolderOnly ? Path.GetDirectoryName(currentFile) : MainWindow.RootFoldersContainFile(currentFile);

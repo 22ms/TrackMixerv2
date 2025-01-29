@@ -44,10 +44,12 @@ namespace TrackMixerv2
         public static Dictionary<string, TrackMetadata> TRACK_METADATA = new Dictionary<string, TrackMetadata>();
         private string[] launchFiles = null;
         public static bool MainWindowActivated;
+        public static MainWindow Instance;
         private static string tempFilesRecordPath = Path.Combine(Path.GetTempPath(), "TrackMixerTempFiles.txt");
 
         public MainWindow(string[] files)
         {
+            Instance = this;
             InitializeComponent();
             string folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
             if (!Directory.Exists(folderPath))
@@ -163,11 +165,14 @@ namespace TrackMixerv2
             }
         }
 
-        public async Task AddNewRootFolder()
+        public async Task<bool> AddNewRootFolder()
         {
-            MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
-            if (page == null) return;
-            page.PauseMedia();
+            {
+                if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
+                {
+                    page.PauseMedia();
+                }
+            }
 
             ContentDialog rootFolderDialog = new ContentDialog()
             {
@@ -182,16 +187,22 @@ namespace TrackMixerv2
             if (ROOT_FOLDERS == null)
                 ROOT_FOLDERS = new List<string>();
             string newFolder = await PickFolderDialog();
-            if (newFolder == null) return;
+            if (newFolder == null) return false;
             ROOT_FOLDERS.Add(newFolder);
             Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
 
-            page.PlayMedia();
+            {
+                if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
+                {
+                    page.PlayMedia();
+                }
+            }
+
+            return true;
         }
 
         public static string RootFoldersContainFile(string path)
         {
-            if (ROOT_FOLDERS == null) return null;
             foreach (var folder in ROOT_FOLDERS)
             {
                 if (path.StartsWith(folder))
