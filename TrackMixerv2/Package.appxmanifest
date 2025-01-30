@@ -10,7 +10,7 @@
   <Identity
     Name="doppelzwei.TrackMixer"
     Publisher="CN=634D4DD0-476A-4BC5-820B-6F97A8EFCB04"
-    Version="2.3.1.0" />
+    Version="2.4.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="6b6aa316-8f3a-4411-8714-7239e8d3bb99" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
