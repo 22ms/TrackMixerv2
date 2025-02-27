@@ -504,7 +504,6 @@ namespace TrackMixerv2
                 File.Delete(tempFilesRecordPath);
             }
         }
-
         private async Task ExportCurrentFileAsync()
         {
             MixerPage page = (TabView.SelectedItem as TabViewItem)?.Content as MixerPage;
@@ -585,22 +584,36 @@ namespace TrackMixerv2
                 Margin = new Thickness(5, 0, 0, 0)
             };
 
+            var targetSizeTextBox = new TextBox
+            {
+                PlaceholderText = "25",
+                Width = 150,
+                Margin = new Thickness(5, 0, 0, 0)
+            };
+
+            // Create separate panels for time inputs and target size
             var timePanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Children =
-        {
-            new TextBlock { Text = "Start:", VerticalAlignment = VerticalAlignment.Center },
-            startTextBox,
-            new TextBlock { Text = "End:", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center },
-            endTextBox
-        }
+                Margin = new Thickness(0, 0, 0, 10)
             };
+            timePanel.Children.Add(new TextBlock { Text = "Start:", VerticalAlignment = VerticalAlignment.Center });
+            timePanel.Children.Add(startTextBox);
+            timePanel.Children.Add(new TextBlock { Text = "End:", Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            timePanel.Children.Add(endTextBox);
+
+            var targetSizePanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal
+            };
+            targetSizePanel.Children.Add(new TextBlock { Text = "Target file size (MB):", VerticalAlignment = VerticalAlignment.Center });
+            targetSizePanel.Children.Add(targetSizeTextBox);
 
             var contentPanel = new StackPanel();
             contentPanel.Children.Add(clipboardOnlyCheckBox);
             contentPanel.Children.Add(exportPathGrid);
             contentPanel.Children.Add(timePanel);
+            contentPanel.Children.Add(targetSizePanel);
 
             dialog.Content = contentPanel;
 
@@ -658,6 +671,9 @@ namespace TrackMixerv2
                 bool hasStartTime = !string.IsNullOrWhiteSpace(startTextBox.Text);
                 bool hasEndTime = !string.IsNullOrWhiteSpace(endTextBox.Text);
 
+                double targetFileSizeMB = 25; // Default value
+                bool hasTargetSize = !string.IsNullOrWhiteSpace(targetSizeTextBox.Text);
+
                 try
                 {
                     if (hasStartTime)
@@ -670,13 +686,21 @@ namespace TrackMixerv2
                     {
                         throw new Exception("Start time must be less than end time.");
                     }
+
+                    if (hasTargetSize)
+                    {
+                        if (!double.TryParse(targetSizeTextBox.Text, out targetFileSizeMB) || targetFileSizeMB <= 0)
+                        {
+                            throw new Exception("Target file size must be a positive number.");
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
                     await new ContentDialog
                     {
-                        Title = "Invalid Time",
-                        Content = $"Error parsing start or end time: {ex.Message}",
+                        Title = "Invalid Input",
+                        Content = $"Error parsing input: {ex.Message}",
                         CloseButtonText = "OK",
                         XamlRoot = this.Content.XamlRoot
                     }.ShowAsync();
@@ -687,6 +711,47 @@ namespace TrackMixerv2
                 // Get media info
                 var mediaInfo = await FFmpeg.GetMediaInfo(inputPath);
                 var audioStreams = mediaInfo.AudioStreams.ToList();
+
+                // Calculate duration in seconds
+                double durationSeconds = mediaInfo.Duration.TotalSeconds;
+                if (durationSeconds <= 0)
+                {
+                    await new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "Unable to determine media duration.",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    }.ShowAsync();
+                    page.PlayMedia();
+                    return;
+                }
+
+                // Define audio bitrate (e.g., 128 kbps)
+                double audioBitrate = 128 * 1000; // in bits per second
+
+                // Calculate total target bitrate
+                double totalTargetBitrate = (targetFileSizeMB * 8 * 1024 * 1024) / durationSeconds; // in bits per second
+
+                // Subtract audio bitrate from total bitrate to get video bitrate
+                double videoBitrate = totalTargetBitrate - audioBitrate;
+
+                if (videoBitrate <= 0)
+                {
+                    await new ContentDialog
+                    {
+                        Title = "Error",
+                        Content = "Target file size is too small for the given duration.",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.Content.XamlRoot
+                    }.ShowAsync();
+                    page.PlayMedia();
+                    return;
+                }
+
+                // Convert bitrate to kbps for FFmpeg
+                string videoBitrateKbps = (videoBitrate / 1000).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                string audioBitrateKbps = (audioBitrate / 1000).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
                 // Build filter_complex parameter
                 var filterParts = new List<string>();
@@ -703,8 +768,9 @@ namespace TrackMixerv2
                     .AddParameter($"-filter_complex \"{filterComplex}\"")
                     .AddParameter("-map [mixedaudio]")
                     .AddParameter("-map 0:v")
-                    .AddParameter("-c:v copy")
-                    .AddParameter("-c:a aac");
+                    .AddParameter("-c:v libx264")
+                    .AddParameter($"-b:v {videoBitrateKbps}k")
+                    .AddParameter($"-c:a aac -b:a {audioBitrateKbps}k");
 
                 if (hasStartTime)
                     conversion.AddParameter($"-ss {startTime}");
@@ -716,7 +782,6 @@ namespace TrackMixerv2
                 {
                     string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
 
-                    CleanupTemporaryFiles();
                     // Record the temp file path
                     File.AppendAllLines(tempFilesRecordPath, new[] { tempPath });
 
