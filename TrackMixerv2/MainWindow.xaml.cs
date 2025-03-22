@@ -181,7 +181,6 @@ namespace TrackMixerv2
         }
         public void SaveRecentVideos()
         {
-            Debug.WriteLine("Saving videos...");
             List<string> recentVideos = new List<string>();
             foreach (Object obj in TabView.TabItems)
             {
