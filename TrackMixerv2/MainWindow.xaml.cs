@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -45,6 +46,7 @@ namespace TrackMixerv2
         private string[] launchFiles = null;
         public static bool MainWindowActivated;
         public static MainWindow Instance;
+        public static List<string> RecentVideos;
         private static string tempFilesRecordPath = Path.Combine(Path.GetTempPath(), "TrackMixerTempFiles.txt");
 
         public MainWindow(string[] files)
@@ -76,6 +78,7 @@ namespace TrackMixerv2
             SizeChanged += MainWindow_SizeChanged;
             TabView.LayoutUpdated += TabView_LayoutUpdated;
             TabView.AddTabButtonClick += TabView_AddTabButtonClick;
+            TabView.TabItemsChanged += TabView_TabItemsChanged;
             TabView.TabCloseRequested += TabView_TabCloseRequested;
 
             IntPtr windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -89,6 +92,18 @@ namespace TrackMixerv2
                     args.WindowActivationState == WindowActivationState.CodeActivated ||
                     args.WindowActivationState == WindowActivationState.PointerActivated;
             };
+        }
+
+        private void TabView_TabItemsChanged(TabView sender, Windows.Foundation.Collections.IVectorChangedEventArgs args)
+        {
+            foreach (Object obj in TabView.TabItems)
+            {
+                if (obj is TabViewItem tabViewItem)
+                {
+                    tabViewItem.IsEnabledChanged += (object sender, DependencyPropertyChangedEventArgs e) => { SaveRecentVideos(); } ;
+                }
+            }
+            SaveRecentVideos();
         }
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -138,12 +153,12 @@ namespace TrackMixerv2
                 ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
             if (launchFiles == null) // TODO: put the following inside of a new method, since repeating, will never happen:d
             {
-                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("RecentVideo"))
+                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("RecentVideosJson"))
                 {
-                    // TODO support tabs
-                    string recentVideo = (string)ApplicationData.Current.LocalSettings.Values["RecentVideo"];
-                    if (File.Exists(recentVideo))
-                        AddNewTabs(new[] { recentVideo });
+                    string recentVideosJson = (string)ApplicationData.Current.LocalSettings.Values["RecentVideosJson"];
+                    List<string> recentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson);
+                    if (recentVideos.Count > 0)
+                        AddNewTabs([.. recentVideos]);
                     else
                         TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
                 }
@@ -163,6 +178,21 @@ namespace TrackMixerv2
                     AddNewTabs(launchFiles);
                 }
             }
+        }
+        public void SaveRecentVideos()
+        {
+            Debug.WriteLine("Saving videos...");
+            List<string> recentVideos = new List<string>();
+            foreach (Object obj in TabView.TabItems)
+            {
+                if (obj is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page) 
+                {
+                    // look, this all sucks, but idgaf anymore abt this project
+                    recentVideos.Add(page.path);
+                }
+            }
+            string recentVideosJson = JsonConvert.SerializeObject(recentVideos);
+            ApplicationData.Current.LocalSettings.Values["RecentVideosJson"] = recentVideosJson;
         }
 
         public async Task<bool> AddNewRootFolder()

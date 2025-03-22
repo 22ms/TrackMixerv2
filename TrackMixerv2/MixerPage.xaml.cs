@@ -29,7 +29,7 @@ namespace TrackMixerv2
         RangeBaseValueChangedEventHandler VolumeSliderChangedHandler;
         List<Slider> VolumeSliders = new List<Slider>();
         List<double> CachedSliderValues = new List<double>();
-        string path;
+        public string path;
         public MixerPage(string path)
         {
             this.InitializeComponent();
@@ -254,6 +254,10 @@ namespace TrackMixerv2
             dispatcherQueue.TryEnqueue(() =>
             {
                 this.path = args.path;
+                // HACK
+                tabViewItem.IsEnabled = false;
+                tabViewItem.IsEnabled = true;
+                // HACK END xd
                 VideoTitle.Text = Helper.GetTitleFromPath(args.path);
                 tabViewItem.Header = VideoTitle.Text;
                 VolumeControlGrid.Children.Clear();
