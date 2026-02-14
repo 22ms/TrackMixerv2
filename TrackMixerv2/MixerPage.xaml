@@ -38,6 +38,11 @@
             <MenuBarItem Title="Edit">
                 <MenuFlyoutItem Text="Preferences" Click="Preferences_Click"/>
             </MenuBarItem>
+            <MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="Discord" Click="OpenLink_Click" Tag="https://discord.com/invite/dWUmubXAXv"/>
+                <MenuFlyoutItem Text="Reddit" Click="OpenLink_Click" Tag="https://www.reddit.com/r/trackmixer"/>
+                <MenuFlyoutItem Text="Ko-fi" Click="OpenLink_Click" Tag="https://ko-fi.com/doppelzwei"/>
+            </MenuBarItem>
         </MenuBar>
         <ContentDialog x:Name="PreferencesDialog"
                Title="Preferences"

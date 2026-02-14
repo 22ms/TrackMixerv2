@@ -55,6 +55,15 @@ namespace TrackMixerv2
                 ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"] = DoubleClickCheckBox.IsChecked ?? false;
             }
         }
+
+        private async void OpenLink_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuFlyoutItem item && item.Tag is string url && Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                var options = new LauncherOptions {};
+                await Launcher.LaunchUriAsync(uri, options);
+            }
+        }
         private void DeleteConfirmationFlyout_Opened(object sender, object e)
         {
             MixedMediaPlayer.PauseAll();
