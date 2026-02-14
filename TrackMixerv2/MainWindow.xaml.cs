@@ -533,8 +533,69 @@ namespace TrackMixerv2
                 File.Delete(tempFilesRecordPath);
             }
         }
+        private async Task<bool> IsFFmpegAvailable()
+        {
+            try
+            {
+                var processStartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = "-version",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                if (!string.IsNullOrEmpty(FFmpeg.ExecutablesPath))
+                {
+                    var exeName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
+                    processStartInfo.FileName = Path.Combine(FFmpeg.ExecutablesPath, exeName);
+                }
+
+                using var process = new Process { StartInfo = processStartInfo };
+                process.Start();
+
+                await process.WaitForExitAsync();
+                return process.ExitCode == 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private async Task ExportCurrentFileAsync()
         {
+            if (!await IsFFmpegAvailable())
+            {
+                ContentDialog ffmpegMissingDialog = new ContentDialog()
+                {
+                    XamlRoot = this.TabView.XamlRoot,
+                    Title = "FFmpeg installation not found in PATH",
+                    Content = new StackPanel()
+                    {
+                        Children =
+                        {
+                            new TextBlock {
+                                Text = "To make the export feature work, you need ffmpeg installed and added to PATH. The easiest way to do this is to use winget:",
+                                TextWrapping = TextWrapping.Wrap,
+                                Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 0, 10)
+                            },
+                            new TextBox {
+                                Text = "winget install -e --id Gyan.FFmpeg",
+                                IsReadOnly = true,
+                                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas")
+                            }
+                        }
+                    },
+                    CloseButtonText = "Dismiss"
+                };
+
+                await ffmpegMissingDialog.ShowAsync();
+                return;
+            }
+
             MixerPage page = (TabView.SelectedItem as TabViewItem)?.Content as MixerPage;
             if (page == null)
                 return;
