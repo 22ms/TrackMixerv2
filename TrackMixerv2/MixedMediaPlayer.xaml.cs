@@ -178,6 +178,18 @@ namespace TrackMixerv2
             }
         }
 
+        private async Task showUnsupportedCodecDialog()
+        {
+            ContentDialog unsupportedCodecDialog = new ContentDialog()
+            {
+                XamlRoot = this.XamlRoot,
+                Title = "Audio/video codec might be unsupported. Audio/video might not play.",
+                Content = "Download the appropiate Audio/video Extension (e.g. AV1, HEVC, VP9, Web Media Extensions) from the Microsoft Store or check the Discord for support.",
+                CloseButtonText = "Dismiss"
+            };
+            await unsupportedCodecDialog.ShowAsync();
+        }
+
         public async void OpenMediaAsync(string filePath)
         {
             // cleanup previous video
@@ -189,11 +201,29 @@ namespace TrackMixerv2
             MediaSource source = MediaSource.CreateFromStorageFile(file);
             MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
             MainMediaPlayer.MediaPlayer.Source = mainPlaybackItem;
-            MediaOpenedHandler = new TypedEventHandler<MediaPlayer, object>((mainPlayer, e) =>
+            MediaOpenedHandler = new TypedEventHandler<MediaPlayer, object>(async (mainPlayer, e) =>
             {
                 MediaPlaybackItem loadedMedia = mainPlayer.Source as MediaPlaybackItem;
                 if (loadedMedia == null) return;
-                if (loadedMedia.AudioTracks.Count > 0) loadedMedia.AudioTracks.SelectedIndex = 0;
+
+                bool isVideoUnsupported = loadedMedia.VideoTracks?.Count > 0 &&
+                    loadedMedia.VideoTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported;
+
+                bool isAudioUnsupported = loadedMedia.AudioTracks?.Count > 0 &&
+                    loadedMedia.AudioTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported;
+
+                if (isVideoUnsupported || isAudioUnsupported)
+                {
+                    dispatcherQueue.TryEnqueue(async () =>
+                    {
+                        await showUnsupportedCodecDialog();
+                    });
+                }
+
+                if (loadedMedia.AudioTracks.Count > 0)
+                {
+                    loadedMedia.AudioTracks.SelectedIndex = 0;
+                }
 
                 if (loadedMedia.AudioTracks.Count > 1)
                 {
@@ -235,6 +265,15 @@ namespace TrackMixerv2
                     });
                 }
             });
+
+            MainMediaPlayer.MediaPlayer.MediaFailed += (sender, args) =>
+            {
+                dispatcherQueue.TryEnqueue(async () =>
+                {
+                    await showUnsupportedCodecDialog();
+                });
+            };
+
             RegisterPlayerEvents();
             RegisterControlEvents();
         }
