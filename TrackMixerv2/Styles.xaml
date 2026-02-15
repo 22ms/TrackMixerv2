@@ -356,7 +356,6 @@
                                         <Slider x:Name="ProgressSlider"
                                                 Margin="7,2,7,1"
                                                 MinWidth="80"
-                                                StepFrequency="10"
                                                 Height="{ThemeResource MediaTransportControlsSliderHeight}"
                                                 VerticalAlignment="Center"
                                                 IsThumbToolTipEnabled="False" />
