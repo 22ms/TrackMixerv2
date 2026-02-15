@@ -125,7 +125,7 @@ namespace TrackMixerv2
             {
                 case PlaylistMode.Chrono:
                     videoFiles = Directory.GetFiles(rootFolder, "*.*", SearchOption.AllDirectories)
-                        .Where(s => s.EndsWith(".mp4") || s.EndsWith(".avi") || s.EndsWith(".mkv"));
+                        .Where(Helper.IsSupportedVideoPath);
                     sortedVideoFiles = videoFiles.OrderBy(f => File.GetCreationTime(f)).ToList();
                     currentIndex = sortedVideoFiles.IndexOf(currentFile);
                     break;

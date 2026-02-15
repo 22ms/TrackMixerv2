@@ -50,8 +50,16 @@
           <uap:FileTypeAssociation Name="videos">
             <uap:SupportedFileTypes>
               <uap:FileType ContentType="video/mp4">.mp4</uap:FileType>
+              <uap:FileType ContentType="video/mp4">.m4v</uap:FileType>
               <uap:FileType ContentType="video/x-matroska">.mkv</uap:FileType>
               <uap:FileType ContentType="video/x-msvideo">.avi</uap:FileType>
+              <uap:FileType ContentType="video/x-ms-wmv">.wmv</uap:FileType>
+              <uap:FileType ContentType="video/quicktime">.mov</uap:FileType>
+              <uap:FileType ContentType="video/webm">.webm</uap:FileType>
+              <uap:FileType ContentType="video/mpeg">.mpg</uap:FileType>
+              <uap:FileType ContentType="video/mpeg">.mpeg</uap:FileType>
+              <uap:FileType ContentType="video/mp2t">.ts</uap:FileType>
+              <uap:FileType ContentType="video/mp2t">.m2ts</uap:FileType>
             </uap:SupportedFileTypes>
             <uap:DisplayName>Videos</uap:DisplayName>
           </uap:FileTypeAssociation>
