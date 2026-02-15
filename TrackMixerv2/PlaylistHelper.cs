@@ -108,6 +108,10 @@ namespace TrackMixerv2
         {
             if (MainWindow.ROOT_FOLDERS == null || MainWindow.ROOT_FOLDERS.Count == 0)
             {
+                if (MainWindow.RootFolderPromptSuppressed)
+                {
+                    return null;
+                }
                 bool success = await MainWindow.Instance.AddNewRootFolder();
                 if (!success) return null;
             }

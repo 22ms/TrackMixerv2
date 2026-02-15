@@ -353,6 +353,10 @@ namespace TrackMixerv2
 
         private async Task<bool> VerifyRootFolders()
         {
+            if (MainWindow.RootFolderPromptSuppressed)
+            {
+                return true;
+            }
             if (MainWindow.ROOT_FOLDERS == null || MainWindow.ROOT_FOLDERS.Count == 0)
             {
                 return await MainWindow.Instance.AddNewRootFolder();

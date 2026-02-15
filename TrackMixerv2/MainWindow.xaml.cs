@@ -194,6 +194,21 @@ namespace TrackMixerv2
             ApplicationData.Current.LocalSettings.Values["RecentVideosJson"] = recentVideosJson;
         }
 
+        public static bool RootFolderPromptSuppressed
+        {
+            get
+            {
+                if (ApplicationData.Current?.LocalSettings?.Values == null) return false;
+                if (!ApplicationData.Current.LocalSettings.Values.TryGetValue("SuppressRootFolderPrompt", out object value)) return false;
+                return value is bool b && b;
+            }
+            set
+            {
+                if (ApplicationData.Current?.LocalSettings?.Values == null) return;
+                ApplicationData.Current.LocalSettings.Values["SuppressRootFolderPrompt"] = value;
+            }
+        }
+
         public async Task<bool> AddNewRootFolder()
         {
             {
@@ -207,11 +222,34 @@ namespace TrackMixerv2
             {
                 XamlRoot = this.TabView.XamlRoot,
                 Title = "Add Root Folders (e.g., C:\\Users\\Mark\\Videos\\NVIDIA) for Automatic Playlist Sorting",
-                Content = "To enable automatic playlist sorting, please add root folders. Track Mixer will search these folders and their subdirectories to create playlists. Currently, you need to manually modify your environment variables to edit the root folders.",
-                CloseButtonText = "Dismiss"
+                Content = "To enable automatic playlist sorting, please add root folders. Track Mixer will search these folders and their subdirectories to create playlists.\n\nYou can still use Track Mixer without root folders (you just won't get automatic sorting).",
+                PrimaryButtonText = "Add root folder",
+                SecondaryButtonText = "Don't ask again",
+                CloseButtonText = "Not now"
             };
 
-            await rootFolderDialog.ShowAsync();
+            ContentDialogResult dialogResult = await rootFolderDialog.ShowAsync();
+            if (dialogResult == ContentDialogResult.Secondary)
+            {
+                RootFolderPromptSuppressed = true;
+                {
+                    if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
+                    {
+                        page.PlayMedia();
+                    }
+                }
+                return false;
+            }
+            if (dialogResult != ContentDialogResult.Primary)
+            {
+                {
+                    if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
+                    {
+                        page.PlayMedia();
+                    }
+                }
+                return false;
+            }
 
             if (ROOT_FOLDERS == null)
                 ROOT_FOLDERS = new List<string>();
@@ -287,7 +325,7 @@ namespace TrackMixerv2
                 // Old behavior: Open all files in new tabs
                 foreach (string file in files)
                 {
-                    if (RootFoldersContainFile(file) == null)
+                    if (RootFoldersContainFile(file) == null && !RootFolderPromptSuppressed)
                         await AddNewRootFolder();
 
                     var newTab = new TabViewItem();
@@ -313,7 +351,7 @@ namespace TrackMixerv2
                 // Replace the current tab with the first file
                 string firstFile = files[0];
 
-                if (RootFoldersContainFile(firstFile) == null) // Check if the first file is in root folders
+                if (RootFoldersContainFile(firstFile) == null && !RootFolderPromptSuppressed) // Check if the first file is in root folders
                     await AddNewRootFolder();
 
                 var currentTab = TabView.SelectedItem as TabViewItem;
@@ -350,7 +388,7 @@ namespace TrackMixerv2
                 for (int i = 1; i < files.Length; i++)
                 {
                     string file = files[i];
-                    if (RootFoldersContainFile(file) == null)
+                    if (RootFoldersContainFile(file) == null && !RootFolderPromptSuppressed)
                         await AddNewRootFolder();
 
                     var newTab = new TabViewItem();
