@@ -55,7 +55,7 @@
             </StackPanel>
         </ContentDialog>
         <Border BorderThickness="0, 1, 0, 0" BorderBrush="{ThemeResource DividerStrokeColorDefault}" Grid.Column="1" Grid.Row="1" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
-            <TextBlock Margin="0, 10, 0, 10" x:Name="VideoTitle" Text="No clip selected" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center" TextAlignment="Center"/>
+            <TextBlock Margin="0, 10, 0, 10" x:Name="VideoTitle" AutomationProperties.AutomationId="VideoTitle" Text="No clip selected" Style="{ThemeResource TitleTextBlockStyle}" HorizontalAlignment="Center" TextAlignment="Center"/>
         </Border>
         <Border Grid.Column="1" Grid.Row="2">
             <local:MixedMediaPlayer x:FieldModifier="public" x:Name="MixedMediaPlayer"/>
@@ -88,7 +88,7 @@
                 <Grid.ColumnSpacing>10</Grid.ColumnSpacing>
                 <SymbolIcon Grid.Row="0" Grid.Column="0" Symbol="Dislike" />
                 <SymbolIcon Grid.Row="0" Grid.Column="2" Symbol="Like" />
-                <Slider x:Name="RatingSlider" Grid.Row="0" Grid.Column="1" AutomationProperties.Name="Slider with ticks" TickFrequency="10" TickPlacement="Outside" SnapsTo="StepValues" VerticalAlignment="Center" Minimum="0" Maximum="100"/>
+                <Slider x:Name="RatingSlider" Grid.Row="0" Grid.Column="1" AutomationProperties.AutomationId="RatingSlider" AutomationProperties.Name="Rating" TickFrequency="10" TickPlacement="Outside" SnapsTo="StepValues" VerticalAlignment="Center" Minimum="0" Maximum="100"/>
                 <StackPanel Padding="7, 2, 7, 7" Orientation="Vertical" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="{ThemeResource DividerStrokeColorDefault}" BorderThickness="1" CornerRadius="5" Background="{ThemeResource LayerFillColorAltBrush}">
                     <TextBlock Text="Playlist filtering" Margin="0, 0, 0, 10" VerticalAlignment="Top" HorizontalAlignment="Left"/>
                     <StackPanel Orientation="Horizontal">

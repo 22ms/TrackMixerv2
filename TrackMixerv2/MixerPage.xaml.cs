@@ -1,21 +1,21 @@
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.VisualBasic.FileIO;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
 using Windows.Storage;
 using Windows.System;
 using Windows.UI.Core;
-using static TrackMixerv2.MainWindow;
 using static TrackMixerv2.MixedMediaPlayer;
 using static TrackMixerv2.PlaylistHelper;
 
@@ -26,33 +26,37 @@ namespace TrackMixerv2
         Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue;
         TabViewItem tabViewItem;
         bool initialLoaded = false;
-        RangeBaseValueChangedEventHandler VolumeSliderChangedHandler;
+        CancellationTokenSource keyboardPollCts;
+        List<RangeBaseValueChangedEventHandler> VolumeSliderChangedHandlers = new List<RangeBaseValueChangedEventHandler>();
         List<Slider> VolumeSliders = new List<Slider>();
         List<double> CachedSliderValues = new List<double>();
+        private bool suppressRatingSave;
+        private long ratingValueChangedToken;
         public string path;
         public MixerPage(string path)
         {
             this.InitializeComponent();
             dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
             this.path = path;
+            VideoTitle.Text = Helper.GetTitleFromPath(path);
             MixedMediaPlayer.Loaded += MixedMediaPlayer_Loaded;
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.MediaFailed += MediaPlayer_MediaFailed;
-            RatingSlider.Loaded += RatingSlider_Loaded;
+            ratingValueChangedToken = RatingSlider.RegisterPropertyChangedCallback(RangeBase.ValueProperty, OnRatingValueChanged);
             PlaylistFilterTimeValue.ValueChanged += PlaylistFilterTimeValue_ValueChanged;
             PlaylistFilterTimeUnit.SelectionChanged += PlaylistFilterTimeUnit_SelectionChanged;
             PlaylistFilterChrono.Click += PlaylistFilterMode_Click;
             PlaylistFilterRating.Click += PlaylistFilterMode_Click;
             PlaylistSubfolderToggle.Click += PlaylistSubfolderToggle_Click;
+            LoadMetadata(path);
         }
         private async void Preferences_Click(object sender, RoutedEventArgs e)
         {
             var result = await PreferencesDialog.ShowAsync();
 
-            // When the "save" button is pressed, save the settings
             if (result == ContentDialogResult.Primary)
             {
-                ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"] = DragAndDropCheckBox.IsChecked ?? false;
-                ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"] = DoubleClickCheckBox.IsChecked ?? false;
+                LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
+                LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
             }
         }
 
@@ -69,14 +73,20 @@ namespace TrackMixerv2
             MixedMediaPlayer.PauseAll();
         }
 
-        private static async void PlaybackKeyboardCheck(MixedMediaPlayer mixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue)
+        private static async Task PlaybackKeyboardCheck(MixedMediaPlayer mixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue, CancellationToken cancellationToken)
         {
             bool previousShiftKeyDown = IsKeyDown(VirtualKey.LeftShift);
             bool previousControlKeyDown = IsKeyDown(VirtualKey.LeftControl);
 
-            while (true)
+            try
             {
-                if (!MainWindow.MainWindowActivated) continue;
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (!MainWindow.MainWindowActivated)
+                {
+                    await Task.Delay(10, cancellationToken);
+                    continue;
+                }
 
                 bool shiftKeyDown = IsKeyDown(VirtualKey.LeftShift);
                 bool controlKeyDown = IsKeyDown(VirtualKey.LeftControl);
@@ -119,7 +129,11 @@ namespace TrackMixerv2
                     });
                     previousControlKeyDown = controlKeyDown;
                 }
-                await Task.Delay(10);
+                await Task.Delay(10, cancellationToken);
+            }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
         }
         private void DeleteVideoConfirmation_Click(object sender, RoutedEventArgs e)
@@ -210,8 +224,9 @@ namespace TrackMixerv2
 
         private void MixedMediaPlayer_Loaded(object sender, RoutedEventArgs e)
         {
-            Action<MixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue> playbackKeyboardCheck = PlaybackKeyboardCheck;
-            Task.Run(() => playbackKeyboardCheck(MixedMediaPlayer, dispatcherQueue));
+            keyboardPollCts = new CancellationTokenSource();
+            var pollToken = keyboardPollCts.Token;
+            Task.Run(() => PlaybackKeyboardCheck(MixedMediaPlayer, dispatcherQueue, pollToken), pollToken);
             dispatcherQueue.TryEnqueue(() =>
             {
                 if (initialLoaded) return;
@@ -221,24 +236,15 @@ namespace TrackMixerv2
                 MixedMediaPlayer.MediaLoaded += MixedMediaPlayer_MediaLoaded;
                 MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
 
-                // Load settings
-                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropOnNewTab"))
-                {
-                    DragAndDropCheckBox.IsChecked = (bool)ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"];
-                }
+                if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.DragAndDropOnNewTab))
+                    DragAndDropCheckBox.IsChecked = LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab);
                 else
-                {
                     DragAndDropCheckBox.IsChecked = true;
-                }
 
-                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DoubleClickOnNewTab"))
-                {
-                    DoubleClickCheckBox.IsChecked = (bool)ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"];
-                }
+                if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.DoubleClickOnNewTab))
+                    DoubleClickCheckBox.IsChecked = LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab);
                 else
-                {
                     DoubleClickCheckBox.IsChecked = true;
-                }
 
                 initialLoaded = true;
             });
@@ -249,7 +255,7 @@ namespace TrackMixerv2
             dispatcherQueue.TryEnqueue(() =>
             {
                 if (sender.CurrentState == MediaPlayerState.Playing)
-                    tabViewItem.IconSource = new SymbolIconSource() { Symbol = Symbol.Volume }; // TODO ini only once but yeah performance egal
+                    tabViewItem.IconSource = new SymbolIconSource() { Symbol = Symbol.Volume };
                 else
                 {
                     tabViewItem.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
@@ -271,12 +277,18 @@ namespace TrackMixerv2
                 tabViewItem.Header = VideoTitle.Text;
                 VolumeControlGrid.Children.Clear();
                 VolumeControlGrid.ColumnDefinitions.Clear();
+                for (int i = 0; i < VolumeSliders.Count && i < VolumeSliderChangedHandlers.Count; i++)
+                {
+                    VolumeSliders[i].ValueChanged -= VolumeSliderChangedHandlers[i];
+                }
                 VolumeSliders.Clear();
+                VolumeSliderChangedHandlers.Clear();
                 LoadMetadata(args.path);
                 for (int i = 0; i < args.TrackPlayers.Count; i++)
                 {
                     int trackIndex = i;
                     Slider volumeSlider = new Slider();
+                    AutomationProperties.SetAutomationId(volumeSlider, $"VolumeSlider_{trackIndex}");
                     volumeSlider.IsTabStop = false;
                     volumeSlider.Height = 100;
                     volumeSlider.TickFrequency = 5;
@@ -288,13 +300,14 @@ namespace TrackMixerv2
                     volumeSlider.Value = GetSavedSliderValue(trackIndex);
 
                     MixedMediaPlayer.SetVolume(trackIndex, volumeSlider.Value);
-                    VolumeSliderChangedHandler = new RangeBaseValueChangedEventHandler(async (e, a) =>
+                    var volumeSliderChangedHandler = new RangeBaseValueChangedEventHandler(async (e, a) =>
                     {
                         CachedSliderValues[trackIndex] = a.NewValue;
                         MixedMediaPlayer.SetVolume(trackIndex, a.NewValue);
                         await SaveMetadata();
                     });
-                    volumeSlider.ValueChanged += VolumeSliderChangedHandler;
+                    volumeSlider.ValueChanged += volumeSliderChangedHandler;
+                    VolumeSliderChangedHandlers.Add(volumeSliderChangedHandler);
                     VolumeSliders.Add(volumeSlider);
 
                     TextBlock trackName = new TextBlock();
@@ -336,9 +349,12 @@ namespace TrackMixerv2
 
         public void Dispose()
         {
+            keyboardPollCts?.Cancel();
+            keyboardPollCts?.Dispose();
+            keyboardPollCts = null;
+
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.MediaFailed -= MediaPlayer_MediaFailed;
-            RatingSlider.Loaded -= RatingSlider_Loaded;
-            RatingSlider.ValueChanged -= RatingSlider_ValueChanged;
+            RatingSlider.UnregisterPropertyChangedCallback(RangeBase.ValueProperty, ratingValueChangedToken);
             PlaylistFilterTimeValue.ValueChanged -= PlaylistFilterTimeValue_ValueChanged;
             PlaylistFilterTimeUnit.SelectionChanged -= PlaylistFilterTimeUnit_SelectionChanged;
             PlaylistFilterChrono.Click -= PlaylistFilterMode_Click;
@@ -346,38 +362,38 @@ namespace TrackMixerv2
             MixedMediaPlayer.Loaded -= MixedMediaPlayer_Loaded;
             MixedMediaPlayer.MediaLoaded -= MixedMediaPlayer_MediaLoaded;
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged -= MediaPlayer_CurrentStateChanged;
-            foreach (var volumeSlider in VolumeSliders)
+            for (int i = 0; i < VolumeSliders.Count && i < VolumeSliderChangedHandlers.Count; i++)
             {
-                volumeSlider.ValueChanged -= VolumeSliderChangedHandler;
+                VolumeSliders[i].ValueChanged -= VolumeSliderChangedHandlers[i];
             }
+            VolumeSliderChangedHandlers.Clear();
             MixedMediaPlayer.Dispose();
             MixedMediaPlayer = null;
         }
-        private void RatingSlider_Loaded(object sender, RoutedEventArgs e)
+        private void OnRatingValueChanged(DependencyObject sender, DependencyProperty dp)
         {
-        }
-        private async void RatingSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
-        {
-            await SaveMetadata(rating: e.NewValue);
+            if (suppressRatingSave)
+                return;
+
+            _ = SaveMetadata();
         }
 
         private void LoadMetadata(string path = null)
         {
             if (path == null)
-            {
                 path = this.path;
-            }
-            RatingSlider.ValueChanged -= RatingSlider_ValueChanged; // workaround for bug causing the saving to occur too early
-            if (TRACK_METADATA.ContainsKey(path))
+
+            suppressRatingSave = true;
+            if (AppState.TRACK_METADATA.ContainsKey(path))
             {
-                CachedSliderValues = TRACK_METADATA[path].Sliders;
-                RatingSlider.Value = TRACK_METADATA[path].Rating;
+                CachedSliderValues = AppState.TRACK_METADATA[path].Sliders;
+                RatingSlider.Value = AppState.TRACK_METADATA[path].Rating;
             }
             else
             {
                 RatingSlider.Value = 0;
             }
-            RatingSlider.ValueChanged += RatingSlider_ValueChanged;
+            suppressRatingSave = false;
         }
 
         private async Task SaveMetadata(string path = null, double rating = -1)
@@ -386,17 +402,9 @@ namespace TrackMixerv2
                 rating = RatingSlider.Value;
             if (path == null)
                 path = this.path;
-            if (TRACK_METADATA.ContainsKey(path))
-            {
-                TRACK_METADATA[path].Rating = RatingSlider.Value;
-                TRACK_METADATA[path].Sliders = CachedSliderValues;
-            }
-            else
-            {
-                TRACK_METADATA.Add(path, new TrackMetadata(rating, CachedSliderValues));
-            }
-            await File.WriteAllTextAsync(TRACK_METADATA_JSON, JsonConvert.SerializeObject(TRACK_METADATA));
-            TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(await File.ReadAllTextAsync(TRACK_METADATA_JSON)); // workaround, not sure why i need that line
+
+            TrackMetadataStore.UpdateEntry(AppState.TRACK_METADATA, path, rating, CachedSliderValues);
+            await TrackMetadataStore.PersistAsync(AppState.TRACK_METADATA, AppState.TrackMetadataJson);
         }
         public void PlayMedia()
         {

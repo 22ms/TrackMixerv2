@@ -22,54 +22,41 @@ using Xabe.FFmpeg;
 
 namespace TrackMixerv2
 {
-    /// <summary>
-    /// An empty window that can be used on its own or navigated to within a Frame.
-    /// </summary>
     public sealed partial class MainWindow : Window
     {
-        public class TrackMetadata
-        {
-            public double Rating;
-            public List<double> Sliders;
-            public TrackMetadata(double rating, List<double> sliders)
-            {
-                Rating = rating;
-                Sliders = sliders;
-            }
-        }
-
         private DispatcherQueue dispatcherQueue;
         public static string TM_ENV_NAME = "TRACKMIXER_ROOT_FOLDERS";
-        public static string TRACK_METADATA_JSON = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2", "track_metadata.json");
-        public static List<string> ROOT_FOLDERS;
-        public static Dictionary<string, TrackMetadata> TRACK_METADATA = new Dictionary<string, TrackMetadata>();
         private string[] launchFiles = null;
         public static bool MainWindowActivated;
         public static MainWindow Instance;
-        public static List<string> RecentVideos;
         private static string tempFilesRecordPath = Path.Combine(Path.GetTempPath(), "TrackMixerTempFiles.txt");
 
         public MainWindow(string[] files)
         {
             Instance = this;
             InitializeComponent();
+            if (UiTestBootstrap.IsEnabled)
+                Title = "Track Mixer UI Test";
             string folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
             if (!Directory.Exists(folderPath))
             {
                 Directory.CreateDirectory(folderPath);
             }
-            if (!File.Exists(TRACK_METADATA_JSON))
-                File.WriteAllText(TRACK_METADATA_JSON, "");
+            string metadataPath = AppState.TrackMetadataJson;
+            string metadataDirectory = Path.GetDirectoryName(metadataPath);
+            if (!string.IsNullOrWhiteSpace(metadataDirectory) && !Directory.Exists(metadataDirectory))
+                Directory.CreateDirectory(metadataDirectory);
+            if (!File.Exists(metadataPath))
+                File.WriteAllText(metadataPath, "");
             CleanupTemporaryFiles();
-            //File.WriteAllText(TRACK_METADATA_JSON, "");
-            TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(TRACK_METADATA_JSON));
-            if (TRACK_METADATA == null)
-                TRACK_METADATA = new Dictionary<string, TrackMetadata>();
+            AppState.TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(AppState.TrackMetadataJson));
+            if (AppState.TRACK_METADATA == null)
+                AppState.TRACK_METADATA = new Dictionary<string, TrackMetadata>();
+            PlaylistHelper.EnsureRootFolderAsync = () => Instance.AddNewRootFolder();
             launchFiles = files;
 
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
-            //this.SetTitleBar(CustomDragRegion);
             AppWindow.TitleBar.ButtonBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             this.Closed += MainWindow_Closed;
@@ -84,7 +71,7 @@ namespace TrackMixerv2
             IntPtr windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
             Microsoft.UI.WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
             var appWindow = AppWindow.GetFromWindowId(windowId);
-            appWindow.SetIcon(Path.Combine(Package.Current.InstalledLocation.Path, @"\Assets\video.ico"));
+            appWindow.SetIcon(GetAssetPath("Assets", "video.ico"));
 
             this.Activated += (sender, args) =>
             {
@@ -147,37 +134,48 @@ namespace TrackMixerv2
         private async void TabView_Loaded(object sender, RoutedEventArgs e)
         {
             DisableTabStops(TabView);
-            ROOT_FOLDERS = new List<string>();
+            AppState.ROOT_FOLDERS = new List<string>();
             string env = Environment.GetEnvironmentVariable(TM_ENV_NAME);
             if (env != null)
-                ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
-            if (launchFiles == null) // TODO: put the following inside of a new method, since repeating, will never happen:d
+                AppState.ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
+
+            if (UiTestBootstrap.SuppressRootFolderPrompt)
+                RootFolderPromptSuppressed = true;
+
+            if (!string.IsNullOrWhiteSpace(UiTestBootstrap.RootFolder))
+                AppState.ROOT_FOLDERS = new List<string> { UiTestBootstrap.RootFolder };
+            else if (launchFiles != null && launchFiles.Length > 0)
             {
-                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("RecentVideosJson"))
-                {
-                    string recentVideosJson = (string)ApplicationData.Current.LocalSettings.Values["RecentVideosJson"];
-                    List<string> recentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson);
-                    if (recentVideos.Count > 0)
-                        AddNewTabs([.. recentVideos]);
-                    else
-                        TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
-                }
-                else
-                {
-                    TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
-                }
+                string? clipDirectory = Path.GetDirectoryName(launchFiles[0]);
+                if (!string.IsNullOrWhiteSpace(clipDirectory))
+                    AppState.ROOT_FOLDERS = new List<string> { clipDirectory };
             }
-            else
+
+            if (launchFiles != null && launchFiles.Length > 0)
             {
-                if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DoubleClickOnNewTab"))
-                {
-                    AddNewTabs(launchFiles, (bool)ApplicationData.Current.LocalSettings.Values["DoubleClickOnNewTab"]);
-                }
+                if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.DoubleClickOnNewTab))
+                    AddNewTabs(launchFiles, LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab));
                 else
-                {
                     AddNewTabs(launchFiles);
-                }
+                return;
             }
+
+            bool hasRecentVideos = false;
+            List<string> recentVideos = new List<string>();
+            if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.RecentVideosJson))
+            {
+                string recentVideosJson = LocalSettingsStore.GetString(LocalSettingsStore.Keys.RecentVideosJson) ?? "[]";
+                recentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson) ?? new List<string>();
+                hasRecentVideos = recentVideos.Count > 0;
+            }
+
+            if (UiTestBootstrap.IsEnabled && !hasRecentVideos)
+                return;
+
+            if (hasRecentVideos)
+                AddNewTabs([.. recentVideos]);
+            else
+                TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
         }
         public void SaveRecentVideos()
         {
@@ -186,26 +184,25 @@ namespace TrackMixerv2
             {
                 if (obj is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page) 
                 {
-                    // look, this all sucks, but idgaf anymore abt this project
                     recentVideos.Add(page.path);
                 }
             }
             string recentVideosJson = JsonConvert.SerializeObject(recentVideos);
-            ApplicationData.Current.LocalSettings.Values["RecentVideosJson"] = recentVideosJson;
+            LocalSettingsStore.SetString(LocalSettingsStore.Keys.RecentVideosJson, recentVideosJson);
         }
 
         public static bool RootFolderPromptSuppressed
         {
             get
             {
-                if (ApplicationData.Current?.LocalSettings?.Values == null) return false;
-                if (!ApplicationData.Current.LocalSettings.Values.TryGetValue("SuppressRootFolderPrompt", out object value)) return false;
-                return value is bool b && b;
+                if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.SuppressRootFolderPrompt))
+                    AppState.RootFolderPromptSuppressed = LocalSettingsStore.GetBool(LocalSettingsStore.Keys.SuppressRootFolderPrompt);
+                return AppState.RootFolderPromptSuppressed;
             }
             set
             {
-                if (ApplicationData.Current?.LocalSettings?.Values == null) return;
-                ApplicationData.Current.LocalSettings.Values["SuppressRootFolderPrompt"] = value;
+                AppState.RootFolderPromptSuppressed = value;
+                LocalSettingsStore.SetBool(LocalSettingsStore.Keys.SuppressRootFolderPrompt, value);
             }
         }
 
@@ -251,12 +248,12 @@ namespace TrackMixerv2
                 return false;
             }
 
-            if (ROOT_FOLDERS == null)
-                ROOT_FOLDERS = new List<string>();
+            if (AppState.ROOT_FOLDERS == null)
+                AppState.ROOT_FOLDERS = new List<string>();
             string newFolder = await PickFolderDialog();
             if (newFolder == null) return false;
-            ROOT_FOLDERS.Add(newFolder);
-            Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
+            AppState.ROOT_FOLDERS.Add(newFolder);
+            Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', AppState.ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
 
             {
                 if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
@@ -268,36 +265,53 @@ namespace TrackMixerv2
             return true;
         }
 
-        public static string RootFoldersContainFile(string path)
+        private TabViewItem CreateTabForFile(string file)
         {
-            foreach (var folder in ROOT_FOLDERS)
+            var newTab = new TabViewItem();
+            newTab.Header = Helper.GetTitleFromPath(file);
+            newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
+
+            MixerPage page = new MixerPage(file);
+            page.AllowDrop = true;
+            page.DragOver += MixedMediaPlayer_DragOver;
+            page.Drop += MixedMediaPlayer_Drop;
+            page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
+            page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+            page.ExportFlyout.Click += MenuFlyoutItem_Click;
+            newTab.Content = page;
+
+            Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
+            newTab.Style = tabStyle;
+            return newTab;
+        }
+
+        private void CloseTab(TabViewItem tab)
+        {
+            if (tab == null)
+                return;
+
+            if (tab.Content is MixerPage page)
             {
-                if (path.StartsWith(folder))
-                {
-                    return folder;
-                }
+                page.DragOver -= MixedMediaPlayer_DragOver;
+                page.Drop -= MixedMediaPlayer_Drop;
+                page.OpenFileFlyout.Click -= MenuFlyoutItem_Click;
+                page.AddRootFlyout.Click -= MenuFlyoutItem_Click;
+                page.ExportFlyout.Click -= MenuFlyoutItem_Click;
+                page.Dispose();
             }
-            return null;
+            TabView.TabItems.Remove(tab);
         }
 
         async Task<IReadOnlyList<StorageFile>> OpenFilesDialog()
         {
-            // Create a file picker
             var openPicker = new FileOpenPicker();
-
-            // Retrieve the window handle (HWND) of the current WinUI 3 window.
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-
-            // Initialize the file picker with the window handle (HWND).
             WinRT.Interop.InitializeWithWindow.Initialize(openPicker, hWnd);
 
             openPicker.SettingsIdentifier = "TrackPicker";
-            // Set options for your file picker
             openPicker.ViewMode = PickerViewMode.List;
-            //openPicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
             openPicker.FileTypeFilter.Add("*");
 
-            // Open the picker for the user to pick a file
             IReadOnlyList<StorageFile> files = await openPicker.PickMultipleFilesAsync();
             return files;
         }
@@ -305,11 +319,8 @@ namespace TrackMixerv2
         {
             var folderPicker = new FolderPicker();
             folderPicker.SettingsIdentifier = "TrackPicker";
-            //folderPicker.SuggestedStartLocation = PickerLocationId.VideosLibrary; // Suggest a start location
             folderPicker.CommitButtonText = "Add root folder";
-            // Get the current window's HWND by passing in the Window object
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            // Associate the HWND with the file picker
             WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hWnd);
             var result = await folderPicker.PickSingleFolderAsync();
             if (result == null) return null;
@@ -322,36 +333,19 @@ namespace TrackMixerv2
 
             if (onNewTab)
             {
-                // Old behavior: Open all files in new tabs
                 foreach (string file in files)
                 {
-                    if (RootFoldersContainFile(file) == null && !RootFolderPromptSuppressed)
+                    if (AppState.RootFoldersContainFile(file) == null && !RootFolderPromptSuppressed)
                         await AddNewRootFolder();
 
-                    var newTab = new TabViewItem();
-                    newTab.Header = Helper.GetTitleFromPath(file);
-                    newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
-
-                    MixerPage page = new MixerPage(file);
-                    page.AllowDrop = true;
-                    page.DragOver += MixedMediaPlayer_DragOver;
-                    page.Drop += MixedMediaPlayer_Drop;
-                    page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
-                    page.AddRootFlyout.Click += MenuFlyoutItem_Click;
-                    page.ExportFlyout.Click += MenuFlyoutItem_Click;
-                    newTab.Content = page;
-
-                    Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
-                    newTab.Style = tabStyle;
-                    TabView.TabItems.Add(newTab);
+                    TabView.TabItems.Add(CreateTabForFile(file));
                 }
             }
             else
             {
-                // Replace the current tab with the first file
                 string firstFile = files[0];
 
-                if (RootFoldersContainFile(firstFile) == null && !RootFolderPromptSuppressed) // Check if the first file is in root folders
+                if (AppState.RootFoldersContainFile(firstFile) == null && !RootFolderPromptSuppressed)
                     await AddNewRootFolder();
 
                 var currentTab = TabView.SelectedItem as TabViewItem;
@@ -364,53 +358,21 @@ namespace TrackMixerv2
                 }
                 else
                 {
-                    // If no tab is selected, create a new tab for the first file
-                    var newTab = new TabViewItem();
-                    newTab.Header = Helper.GetTitleFromPath(firstFile);
-                    newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
-
-                    MixerPage page = new MixerPage(firstFile);
-                    page.AllowDrop = true;
-                    page.DragOver += MixedMediaPlayer_DragOver;
-                    page.Drop += MixedMediaPlayer_Drop;
-                    page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
-                    page.AddRootFlyout.Click += MenuFlyoutItem_Click;
-                    page.ExportFlyout.Click += MenuFlyoutItem_Click;
-                    newTab.Content = page;
-
-                    Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
-                    newTab.Style = tabStyle;
+                    var newTab = CreateTabForFile(firstFile);
                     TabView.TabItems.Add(newTab);
                     TabView.SelectedItem = newTab;
                 }
 
-                // Add any remaining files to new tabs
                 for (int i = 1; i < files.Length; i++)
                 {
                     string file = files[i];
-                    if (RootFoldersContainFile(file) == null && !RootFolderPromptSuppressed)
+                    if (AppState.RootFoldersContainFile(file) == null && !RootFolderPromptSuppressed)
                         await AddNewRootFolder();
 
-                    var newTab = new TabViewItem();
-                    newTab.Header = Helper.GetTitleFromPath(file);
-                    newTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
-
-                    MixerPage page = new MixerPage(file);
-                    page.AllowDrop = true;
-                    page.DragOver += MixedMediaPlayer_DragOver;
-                    page.Drop += MixedMediaPlayer_Drop;
-                    page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
-                    page.AddRootFlyout.Click += MenuFlyoutItem_Click;
-                    page.ExportFlyout.Click += MenuFlyoutItem_Click;
-                    newTab.Content = page;
-
-                    Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
-                    newTab.Style = tabStyle;
-                    TabView.TabItems.Add(newTab);
+                    TabView.TabItems.Add(CreateTabForFile(file));
                 }
             }
 
-            // Ensure a tab is selected if none are
             if (TabView.SelectedIndex < 0)
             {
                 try
@@ -426,7 +388,7 @@ namespace TrackMixerv2
         private async void TabView_AddTabButtonClick(TabView sender, object args)
         {
             IReadOnlyList<StorageFile> files = await OpenFilesDialog();
-            if (files.Count <= 0) return; // operation cancelled
+            if (files.Count <= 0) return;
 
             List<string> filePaths = files.Select(file => file.Path).ToList();
             AddNewTabs(filePaths.ToArray());
@@ -434,18 +396,7 @@ namespace TrackMixerv2
 
         private void TabView_TabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
         {
-            if (args.Tab.Content is MixerPage)
-            {
-                MixerPage page = (args.Tab.Content as MixerPage);
-                page.DragOver -= MixedMediaPlayer_DragOver;
-                page.Drop -= MixedMediaPlayer_Drop;
-                page.OpenFileFlyout.Click -= MenuFlyoutItem_Click;
-                page.AddRootFlyout.Click -= MenuFlyoutItem_Click;
-                page.ExportFlyout.Click -= MenuFlyoutItem_Click;
-                page.Dispose(); // possible memory leak
-            }
-            sender.TabItems.Remove(args.Tab);
-            GC.Collect();
+            CloseTab(args.Tab as TabViewItem);
         }
 
         private void NewTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -456,12 +407,7 @@ namespace TrackMixerv2
 
         private void CloseTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
         {
-            if (TabView.SelectedItem is MixerPage)
-            {
-                (TabView.SelectedItem as MixerPage).Dispose(); // possible memory leak
-            }
-            TabView.TabItems.Remove(TabView.SelectedItem);
-            GC.Collect();
+            CloseTab(TabView.SelectedItem as TabViewItem);
             args.Handled = true;
         }
 
@@ -501,13 +447,13 @@ namespace TrackMixerv2
                         return;
                     }
                     List<string> videoFilePaths = items.OfType<StorageFile>()
-                                    .Where(file => Helper.IsVideoFile(file))
+                                    .Where(file => VideoFileHelper.IsVideoFile(file))
                                     .Select(file => file.Path)
                                     .ToList();
 
-                    if (ApplicationData.Current.LocalSettings.Values.ContainsKey("DragAndDropOnNewTab"))
+                    if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.DragAndDropOnNewTab))
                     {
-                        AddNewTabs(videoFilePaths.ToArray(), (bool)ApplicationData.Current.LocalSettings.Values["DragAndDropOnNewTab"]);
+                        AddNewTabs(videoFilePaths.ToArray(), LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab));
                     }
                     else
                     {
@@ -565,7 +511,6 @@ namespace TrackMixerv2
                     }
                     catch
                     {
-                        // Handle exceptions if needed
                     }
                 }
                 File.Delete(tempFilesRecordPath);
@@ -644,7 +589,6 @@ namespace TrackMixerv2
             double[] normalizedLevels = levels.Select(l => l / 100.0).ToArray();
             string inputPath = page.GetCurrentPath();
 
-            // Create a ContentDialog with the required UI elements
             var dialog = new ContentDialog
             {
                 Title = "Export Options",
@@ -654,7 +598,6 @@ namespace TrackMixerv2
                 XamlRoot = this.Content.XamlRoot
             };
 
-            // Create UI controls
             var clipboardOnlyCheckBox = new CheckBox
             {
                 Content = "Clipboard only",
@@ -673,14 +616,13 @@ namespace TrackMixerv2
                 Width = 30
             };
 
-            // Use a Grid to better control layout
             var exportPathGrid = new Grid
             {
                 Margin = new Thickness(0, 0, 0, 10)
             };
-            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Label
-            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // TextBox
-            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Button
+            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            exportPathGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var exportPathLabel = new TextBlock
             {
@@ -719,7 +661,6 @@ namespace TrackMixerv2
                 Margin = new Thickness(5, 0, 0, 0)
             };
 
-            // Create separate panels for time inputs and target size
             var timePanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -745,7 +686,6 @@ namespace TrackMixerv2
 
             dialog.Content = contentPanel;
 
-            // Event handlers
             clipboardOnlyCheckBox.Checked += (s, e) =>
             {
                 exportPathTextBox.IsEnabled = false;
@@ -799,16 +739,16 @@ namespace TrackMixerv2
                 bool hasStartTime = !string.IsNullOrWhiteSpace(startTextBox.Text);
                 bool hasEndTime = !string.IsNullOrWhiteSpace(endTextBox.Text);
 
-                double targetFileSizeMB = 25; // Default value
+                double targetFileSizeMB = 25;
                 bool hasTargetSize = !string.IsNullOrWhiteSpace(targetSizeTextBox.Text);
 
                 try
                 {
                     if (hasStartTime)
-                        startTime = ParseTimeInput(startTextBox.Text);
+                        startTime = ExportPipeline.ParseTimeInput(startTextBox.Text);
 
                     if (hasEndTime)
-                        endTime = ParseTimeInput(endTextBox.Text);
+                        endTime = ExportPipeline.ParseTimeInput(endTextBox.Text);
 
                     if (hasStartTime && hasEndTime && startTime >= endTime)
                     {
@@ -836,12 +776,16 @@ namespace TrackMixerv2
                     return;
                 }
 
-                // Get media info
                 var mediaInfo = await FFmpeg.GetMediaInfo(inputPath);
                 var audioStreams = mediaInfo.AudioStreams.ToList();
 
-                // Calculate duration in seconds
-                double durationSeconds = mediaInfo.Duration.TotalSeconds;
+                double durationSeconds = ExportPipeline.ComputeExportDurationSeconds(
+                    mediaInfo.Duration.TotalSeconds,
+                    hasStartTime,
+                    startTime,
+                    hasEndTime,
+                    endTime);
+
                 if (durationSeconds <= 0)
                 {
                     await new ContentDialog
@@ -855,16 +799,10 @@ namespace TrackMixerv2
                     return;
                 }
 
-                // Define audio bitrate (e.g., 128 kbps)
-                double audioBitrate = 128 * 1000; // in bits per second
+                double audioBitrate = 128 * 1000;
+                double videoBitrateKbps = ExportPipeline.ComputeVideoBitrateKbps(targetFileSizeMB, durationSeconds, audioBitrate);
 
-                // Calculate total target bitrate
-                double totalTargetBitrate = (targetFileSizeMB * 8 * 1024 * 1024) / durationSeconds; // in bits per second
-
-                // Subtract audio bitrate from total bitrate to get video bitrate
-                double videoBitrate = totalTargetBitrate - audioBitrate;
-
-                if (videoBitrate <= 0)
+                if (videoBitrateKbps <= 0)
                 {
                     await new ContentDialog
                     {
@@ -877,19 +815,9 @@ namespace TrackMixerv2
                     return;
                 }
 
-                // Convert bitrate to kbps for FFmpeg
-                string videoBitrateKbps = (videoBitrate / 1000).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                string videoBitrateKbpsText = videoBitrateKbps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
                 string audioBitrateKbps = (audioBitrate / 1000).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-
-                // Build filter_complex parameter
-                var filterParts = new List<string>();
-                for (int i = 0; i < audioStreams.Count; i++)
-                {
-                    filterParts.Add($"[0:a:{i}]volume={normalizedLevels[i].ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}[a{i}]");
-                }
-                string filterComplex = string.Join(";", filterParts);
-                string audioInputs = string.Join("", Enumerable.Range(0, audioStreams.Count).Select(i => $"[a{i}]"));
-                filterComplex += $";{audioInputs}amix=inputs={audioStreams.Count}[mixedaudio]";
+                string filterComplex = ExportPipeline.BuildFilterComplex(audioStreams.Count, normalizedLevels);
 
                 var conversion = FFmpeg.Conversions.New()
                     .AddParameter($"-i \"{inputPath}\"")
@@ -897,7 +825,7 @@ namespace TrackMixerv2
                     .AddParameter("-map [mixedaudio]")
                     .AddParameter("-map 0:v")
                     .AddParameter("-c:v libx264")
-                    .AddParameter($"-b:v {videoBitrateKbps}k")
+                    .AddParameter($"-b:v {videoBitrateKbpsText}k")
                     .AddParameter($"-c:a aac -b:a {audioBitrateKbps}k");
 
                 if (hasStartTime)
@@ -910,7 +838,6 @@ namespace TrackMixerv2
                 {
                     string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
 
-                    // Record the temp file path
                     File.AppendAllLines(tempFilesRecordPath, new[] { tempPath });
 
                     conversion.SetOutput(tempPath);
@@ -950,33 +877,6 @@ namespace TrackMixerv2
             page.PlayMedia();
         }
 
-        private TimeSpan ParseTimeInput(string input)
-        {
-            input = input.Trim();
-
-            if (string.IsNullOrEmpty(input))
-                throw new FormatException("Time input is empty");
-
-            // If input is digits only, assume seconds
-            if (double.TryParse(input, out double seconds))
-            {
-                return TimeSpan.FromSeconds(seconds);
-            }
-
-            // Handle MM:SS format
-            if (input.Count(c => c == ':') == 1)
-            {
-                input = "00:" + input;
-            }
-
-            if (TimeSpan.TryParse(input, out TimeSpan result))
-            {
-                return result;
-            }
-
-            throw new FormatException("Invalid time format. Use SS, MM:SS, or HH:MM:SS.");
-        }
-
         private async Task CopyFileToClipboardAsync(string filePath)
         {
             var storageFile = await StorageFile.GetFileFromPathAsync(filePath);
@@ -993,14 +893,33 @@ namespace TrackMixerv2
             {
                 var child = VisualTreeHelper.GetChild(root, i);
 
-                // If the child is a control and has a TabStop, disable it
                 if (child is Control control)
                 {
                     control.IsTabStop = false;
                 }
 
-                // Recursively disable TabStop for children
                 DisableTabStops(child);
+            }
+        }
+
+        private static string? packagedAssetRoot;
+
+        private static string GetAssetPath(params string[] relativeParts)
+        {
+            packagedAssetRoot ??= TryGetPackagedAssetRoot();
+            string root = packagedAssetRoot ?? AppContext.BaseDirectory;
+            return Path.Combine([root, .. relativeParts]);
+        }
+
+        private static string? TryGetPackagedAssetRoot()
+        {
+            try
+            {
+                return Package.Current.InstalledLocation.Path;
+            }
+            catch
+            {
+                return null;
             }
         }
     }

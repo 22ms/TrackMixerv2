@@ -27,6 +27,13 @@
     <WindowsPackageType>MSIX</WindowsPackageType>
     <!--<WindowsPackageType>None</WindowsPackageType>-->
   </PropertyGroup>
+  <PropertyGroup Condition="'$(UiTestBuild)'=='true'">
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <EnableMsixTooling>false</EnableMsixTooling>
+  </PropertyGroup>
   <ItemGroup>
     <None Remove="Assets\trackmixerv2.ico" />
     <None Remove="MixedMediaPlayer.xaml" />
@@ -45,15 +52,16 @@
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FFMpegCore" Version="5.4.0" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.251221100">
+    <ProjectReference Include="..\TrackMixerv2.Core\TrackMixerv2.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.260610101">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260209005" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="System.Windows.Extensions" Version="10.0.3" />
     <PackageReference Include="Xabe.FFmpeg" Version="6.0.2" />
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
@@ -88,4 +96,19 @@
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
+
+  <Target Name="CopyUiTestPublishAssets" AfterTargets="Publish" Condition="'$(UiTestBuild)'=='true'">
+    <Copy
+      SourceFiles="$(TargetDir)TrackMixerv2.pri"
+      DestinationFolder="$(PublishDir)"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(TargetDir)TrackMixerv2.pri')" />
+    <ItemGroup>
+      <_UiTestAssetFiles Include="$(TargetDir)Assets\**\*.*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_UiTestAssetFiles)"
+      DestinationFolder="$(PublishDir)Assets\%(RecursiveDir)"
+      SkipUnchangedFiles="true" />
+  </Target>
 </Project>
