@@ -18,6 +18,9 @@ public static class TrackMetadataStore
                 metadata.Add(path, new TrackMetadata(rating, sliders));
             }
         }
+
+        PlaylistIndexCache.InvalidateRating();
+        FileTimeCache.Remove(path);
     }
 
     public static async Task PersistAsync(Dictionary<string, TrackMetadata> metadata, string jsonPath)

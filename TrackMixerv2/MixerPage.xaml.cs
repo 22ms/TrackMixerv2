@@ -53,6 +53,7 @@ namespace TrackMixerv2
         private double _ratingSliderMinWidth;
         private double _ratingSliderMaxWidth;
         private double _ratingControlsMinWidth;
+        bool syncingSuppressRootFolderPromptCheckBox;
         public string path;
         public MixerPage(string path)
         {
@@ -328,6 +329,7 @@ namespace TrackMixerv2
         private void PlaylistSubfolderToggle_Click(object sender, RoutedEventArgs e)
         {
             MixedMediaPlayer.PlaylistConfig.SubfolderOnly = PlaylistSubfolderToggle.IsChecked.GetValueOrDefault();
+            PrewarmPlaylistIndex(MixedMediaPlayer.PlaylistConfig, path);
         }
 
         private void PlaylistFilterTimeUnit_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -878,6 +880,58 @@ namespace TrackMixerv2
             return InputKeyboardSource
                 .GetKeyStateForCurrentThread(key)
                 .HasFlag(CoreVirtualKeyStates.Down);
+        }
+
+        public async Task<bool> ShowRootFolderManagerAsync()
+        {
+            RefreshRootFoldersDialog();
+            await RootFoldersDialog.ShowAsync();
+            return RootFolderStore.Folders.Count > 0;
+        }
+
+        void RefreshRootFoldersDialog()
+        {
+            RootFolderStore.EnsureLoaded();
+            var folders = RootFolderStore.Folders.ToList();
+            RootFolderList.ItemsSource = folders;
+            bool hasFolders = folders.Count > 0;
+            RootFolderList.Visibility = hasFolders ? Visibility.Visible : Visibility.Collapsed;
+            RootFolderEmptyText.Visibility = hasFolders ? Visibility.Collapsed : Visibility.Visible;
+            syncingSuppressRootFolderPromptCheckBox = true;
+            SuppressRootFolderPromptCheckBox.IsChecked = MainWindow.RootFolderPromptSuppressed;
+            syncingSuppressRootFolderPromptCheckBox = false;
+        }
+
+        private async void AddRootFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (MainWindow.Instance == null)
+                return;
+
+            string folder = await MainWindow.Instance.PickRootFolderAsync();
+            if (folder != null)
+            {
+                RootFolderStore.Add(folder);
+                PrewarmPlaylistIndex(MixedMediaPlayer.PlaylistConfig, path);
+            }
+            RefreshRootFoldersDialog();
+        }
+
+        private void RemoveRootFolder_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string folder })
+            {
+                RootFolderStore.Remove(folder);
+                RefreshRootFoldersDialog();
+            }
+        }
+
+        private void SuppressRootFolderPromptCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (syncingSuppressRootFolderPromptCheckBox)
+                return;
+
+            if (SuppressRootFolderPromptCheckBox.IsChecked is bool suppressed)
+                MainWindow.RootFolderPromptSuppressed = suppressed;
         }
     }
 }

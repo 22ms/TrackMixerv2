@@ -46,5 +46,6 @@ public static class AppState
         TRACK_METADATA = new Dictionary<string, TrackMetadata>();
         RootFolderPromptSuppressed = false;
         PlaylistHelper.EnsureRootFolderAsync = null;
+        PlaylistIndexCache.Clear();
     }
 }

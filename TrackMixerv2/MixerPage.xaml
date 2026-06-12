@@ -36,13 +36,13 @@
 
 
 
-        <MenuBar Grid.Row="0">
+        <MenuBar x:Name="MainMenuBar" Grid.Row="0">
 
-            <MenuBarItem Title="File">
+            <MenuBarItem x:Name="FileMenuBarItem" Title="File">
 
                 <MenuFlyoutItem x:FieldModifier="public" x:Name="OpenFileFlyout" Text="Open..." Tag="openFile" />
 
-                <MenuFlyoutItem x:FieldModifier="public" x:Name="AddRootFlyout" Text="Add root folder" Tag="addRootFolder"/>
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="ManageRootFoldersFlyout" Text="Root folders..." Tag="manageRootFolders"/>
 
                 <MenuFlyoutItem x:FieldModifier="public" x:Name="ExportFlyout" Text="Export current file..." Tag="exportFile"/>
 
@@ -86,6 +86,54 @@
 
             </StackPanel>
 
+        </ContentDialog>
+
+        <ContentDialog x:Name="RootFoldersDialog"
+                       Title="Root folders"
+                       PrimaryButtonText="Close"
+                       DefaultButton="Primary">
+            <StackPanel Spacing="12" MinWidth="420">
+                <TextBlock Text="Clips under these folders are used for automatic playlist sorting."
+                           TextWrapping="WrapWholeWords"
+                           Opacity="0.8" />
+                <Grid MinHeight="48" MaxHeight="240">
+                    <ListView x:Name="RootFolderList"
+                              SelectionMode="None"
+                              IsItemClickEnabled="False">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid ColumnSpacing="12" Padding="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"
+                                               ToolTipService.ToolTip="{x:Bind}" />
+                                    <Button Grid.Column="1"
+                                            Content="Remove"
+                                            Tag="{x:Bind}"
+                                            Click="RemoveRootFolder_Click" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock x:Name="RootFolderEmptyText"
+                               Text="No root folders yet."
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Opacity="0.55" />
+                </Grid>
+                <Button x:Name="AddRootFolderButton"
+                        Content="Add folder..."
+                        HorizontalAlignment="Stretch"
+                        Click="AddRootFolderButton_Click" />
+                <CheckBox x:Name="SuppressRootFolderPromptCheckBox"
+                          Content="Don't ask to add root folders automatically"
+                          Checked="SuppressRootFolderPromptCheckBox_Changed"
+                          Unchecked="SuppressRootFolderPromptCheckBox_Changed" />
+            </StackPanel>
         </ContentDialog>
 
 

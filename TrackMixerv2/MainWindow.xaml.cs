@@ -249,7 +249,7 @@ namespace TrackMixerv2
         private async void TabView_Loaded(object sender, RoutedEventArgs e)
         {
             DisableTabStops(TabView);
-            AppState.ROOT_FOLDERS = UiTestBootstrap.ResolveRootFoldersFromEnvironment().ToList();
+            RootFolderStore.EnsureLoaded();
 
             if (UiTestBootstrap.SuppressRootFolderPrompt)
                 RootFolderPromptSuppressed = true;
@@ -328,61 +328,23 @@ namespace TrackMixerv2
 
         public async Task<bool> AddNewRootFolder()
         {
-            {
-                if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
-                {
-                    page.PauseMedia();
-                }
-            }
-
-            ContentDialog rootFolderDialog = new ContentDialog()
-            {
-                XamlRoot = this.TabView.XamlRoot,
-                Title = "Add Root Folders (e.g., C:\\Users\\Mark\\Videos\\NVIDIA) for Automatic Playlist Sorting",
-                Content = "To enable automatic playlist sorting, please add root folders. Track Mixer will search these folders and their subdirectories to create playlists.\n\nYou can still use Track Mixer without root folders (you just won't get automatic sorting).",
-                PrimaryButtonText = "Add root folder",
-                SecondaryButtonText = "Don't ask again",
-                CloseButtonText = "Not now"
-            };
-
-            ContentDialogResult dialogResult = await rootFolderDialog.ShowAsync();
-            if (dialogResult == ContentDialogResult.Secondary)
-            {
-                RootFolderPromptSuppressed = true;
-                {
-                    if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
-                    {
-                        page.PlayMedia();
-                    }
-                }
+            if (TabView.SelectedItem is not TabViewItem tabViewItem || tabViewItem.Content is not MixerPage page)
                 return false;
-            }
-            if (dialogResult != ContentDialogResult.Primary)
+
+            page.PauseMedia();
+            try
             {
-                {
-                    if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
-                    {
-                        page.PlayMedia();
-                    }
-                }
-                return false;
+                return await page.ShowRootFolderManagerAsync();
             }
-
-            if (AppState.ROOT_FOLDERS == null)
-                AppState.ROOT_FOLDERS = new List<string>();
-            string newFolder = await PickFolderDialog();
-            if (newFolder == null) return false;
-            AppState.ROOT_FOLDERS.Add(newFolder);
-            Task.Run(() => Environment.SetEnvironmentVariable(AppPaths.RootFoldersEnvVar, string.Join(';', AppState.ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
-
+            finally
             {
-                if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
-                {
-                    page.PlayMedia();
-                }
+                page.PlayMedia();
             }
+        }
 
-            return true;
+        public async Task<string?> PickRootFolderAsync()
+        {
+            return await PickFolderDialog();
         }
 
         private TabViewItem CreateTabForFile(string file)
@@ -396,7 +358,7 @@ namespace TrackMixerv2
             page.DragOver += MixedMediaPlayer_DragOver;
             page.Drop += MixedMediaPlayer_Drop;
             page.OpenFileFlyout.Click += MenuFlyoutItem_Click;
-            page.AddRootFlyout.Click += MenuFlyoutItem_Click;
+            page.ManageRootFoldersFlyout.Click += MenuFlyoutItem_Click;
             page.ExportFlyout.Click += MenuFlyoutItem_Click;
             newTab.Content = page;
 
@@ -416,7 +378,7 @@ namespace TrackMixerv2
                 page.DragOver -= MixedMediaPlayer_DragOver;
                 page.Drop -= MixedMediaPlayer_Drop;
                 page.OpenFileFlyout.Click -= MenuFlyoutItem_Click;
-                page.AddRootFlyout.Click -= MenuFlyoutItem_Click;
+                page.ManageRootFoldersFlyout.Click -= MenuFlyoutItem_Click;
                 page.ExportFlyout.Click -= MenuFlyoutItem_Click;
                 page.Dispose();
             }
@@ -607,9 +569,19 @@ namespace TrackMixerv2
                         page.OpenNewMedia(file);
                         break;
                     }
-                case "addRootFolder":
+                case "manageRootFolders":
                     {
-                        await AddNewRootFolder();
+                        MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
+                        if (page == null) return;
+                        page.PauseMedia();
+                        try
+                        {
+                            await page.ShowRootFolderManagerAsync();
+                        }
+                        finally
+                        {
+                            page.PlayMedia();
+                        }
                         break;
                     }
                 case "exportFile":

@@ -16,8 +16,13 @@ public sealed class AppPathsScenarioTests : IDisposable
   [Fact]
   public void Data_directory_uses_isolated_storage_when_ui_test_enabled()
   {
+    string? previousSettingsPath = Environment.GetEnvironmentVariable(LocalSettingsStore.JsonPathEnvVar);
+    string? previousMetadataPath = Environment.GetEnvironmentVariable(AppState.TrackMetadataJsonEnvVar);
     Environment.SetEnvironmentVariable(UiTestBootstrap.EnabledEnvVar, "1");
+    Environment.SetEnvironmentVariable(LocalSettingsStore.JsonPathEnvVar, null);
+    Environment.SetEnvironmentVariable(AppState.TrackMetadataJsonEnvVar, null);
     UiTestBootstrap.ResetIsolatedStorageForTests();
+    LocalSettingsStore.ResetCache();
 
     try
     {
@@ -28,6 +33,8 @@ public sealed class AppPathsScenarioTests : IDisposable
     finally
     {
       Environment.SetEnvironmentVariable(UiTestBootstrap.EnabledEnvVar, _previousUiTestFlag);
+      Environment.SetEnvironmentVariable(LocalSettingsStore.JsonPathEnvVar, previousSettingsPath);
+      Environment.SetEnvironmentVariable(AppState.TrackMetadataJsonEnvVar, previousMetadataPath);
       UiTestBootstrap.ResetIsolatedStorageForTests();
       LocalSettingsStore.ResetCache();
     }

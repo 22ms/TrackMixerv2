@@ -87,20 +87,18 @@ public class PlaylistHelper
     public static string? IsInRatings(PlaylistConfig playlistConfig, string? currentFile)
     {
         if (currentFile == null || playlistConfig == null) return null;
-        string? rootFolder = playlistConfig.SubfolderOnly ? Path.GetDirectoryName(currentFile) : AppState.RootFoldersContainFile(currentFile);
+        string? rootFolder = ResolveRootFolder(playlistConfig, currentFile);
         if (rootFolder == null) return null;
 
         DateTime afterThis = DateTime.Now.Subtract(playlistConfig.TimeSpan);
-        List<string> sortedVideoFiles = AppState.TRACK_METADATA
-            .Where(pair => Helper.PathIsUnderDirectory(pair.Key, rootFolder) && File.GetCreationTime(pair.Key) > afterThis)
-            .OrderByDescending(pair => pair.Value.Rating)
-            .Select(pair => pair.Key)
-            .ToList();
-        if (sortedVideoFiles.Count <= 0) return null;
-        bool ratingAboveZero = (AppState.TRACK_METADATA.ContainsKey(currentFile) && AppState.TRACK_METADATA[currentFile].Rating > 0);
-        int currentIndex = sortedVideoFiles.IndexOf(currentFile);
-        if (currentIndex != -1 && ratingAboveZero) return null;
-        return sortedVideoFiles[0];
+        PlaylistIndex playlist = PlaylistIndexCache.GetRating(rootFolder, afterThis);
+        if (playlist.OrderedPaths.Count <= 0) return null;
+
+        bool ratingAboveZero = AppState.TRACK_METADATA.TryGetValue(currentFile, out TrackMetadata? metadata)
+            && metadata.Rating > 0;
+        bool hasIndex = playlist.TryGetIndex(currentFile, out int currentIndex);
+        if (hasIndex && ratingAboveZero) return null;
+        return playlist.OrderedPaths[0];
     }
 
     public static async Task<string?> GetTrack(PlaylistConfig playlistConfig, string? currentFile, Direction direction)
@@ -119,46 +117,37 @@ public class PlaylistHelper
 
         if (currentFile == null || playlistConfig == null) return null;
 
-        string? rootFolder = playlistConfig.SubfolderOnly ? Path.GetDirectoryName(currentFile) : AppState.RootFoldersContainFile(currentFile);
+        string? rootFolder = ResolveRootFolder(playlistConfig, currentFile);
         if (rootFolder == null) return null;
 
-        IEnumerable<string> videoFiles;
-        List<string> sortedVideoFiles;
-        int currentIndex;
-
+        PlaylistIndex playlist;
         switch (playlistConfig.PlaylistMode)
         {
             case PlaylistMode.Chrono:
-                videoFiles = Directory.GetFiles(rootFolder, "*.*", SearchOption.AllDirectories)
-                    .Where(Helper.IsSupportedVideoPath);
-                sortedVideoFiles = videoFiles.OrderBy(f => File.GetCreationTime(f)).ToList();
-                currentIndex = sortedVideoFiles.IndexOf(currentFile);
+                playlist = PlaylistIndexCache.GetChronoOrRebuild(rootFolder, currentFile);
                 break;
             case PlaylistMode.Rating:
-                DateTime afterThis = DateTime.Now.Subtract(playlistConfig.TimeSpan);
-                sortedVideoFiles = AppState.TRACK_METADATA
-                    .Where(pair => Helper.PathIsUnderDirectory(pair.Key, rootFolder) && File.GetCreationTime(pair.Key) > afterThis)
-                    .OrderByDescending(pair => pair.Value.Rating)
-                    .Select(pair => pair.Key)
-                    .ToList();
-                currentIndex = sortedVideoFiles.IndexOf(currentFile);
+                playlist = PlaylistIndexCache.GetRating(rootFolder, DateTime.Now.Subtract(playlistConfig.TimeSpan));
                 break;
             default:
                 return null;
         }
 
+        if (!playlist.TryGetIndex(currentFile, out int currentIndex))
+            currentIndex = -1;
+
         if (direction == Direction.Next)
         {
-            if (currentIndex == -1 || currentIndex == sortedVideoFiles.Count - 1)
+            if (currentIndex == -1 || currentIndex == playlist.OrderedPaths.Count - 1)
                 return null;
 
-            return sortedVideoFiles[currentIndex + 1];
+            return playlist.OrderedPaths[currentIndex + 1];
         }
 
         if (currentIndex == -1 || currentIndex == 0)
             return null;
 
-        return sortedVideoFiles[currentIndex - 1];
+        return playlist.OrderedPaths[currentIndex - 1];
     }
 
     public static TimeSpan TimeSpanFromUnitValue(TimeUnit unit, double value)
@@ -171,5 +160,35 @@ public class PlaylistHelper
             TimeUnit.Year => TimeSpan.FromDays(value * 365),
             _ => TimeSpan.FromDays(31),
         };
+    }
+
+    private static string? ResolveRootFolder(PlaylistConfig playlistConfig, string currentFile) =>
+        playlistConfig.SubfolderOnly
+            ? Path.GetDirectoryName(currentFile)
+            : AppState.RootFoldersContainFile(currentFile);
+
+    public static void PrewarmPlaylistIndex(PlaylistConfig? playlistConfig, string? currentFile)
+    {
+        if (playlistConfig == null || string.IsNullOrWhiteSpace(currentFile))
+            return;
+
+        Task.Run(() => WarmPlaylistIndex(playlistConfig, currentFile));
+    }
+
+    static void WarmPlaylistIndex(PlaylistConfig playlistConfig, string currentFile)
+    {
+        string? rootFolder = ResolveRootFolder(playlistConfig, currentFile);
+        if (rootFolder == null)
+            return;
+
+        switch (playlistConfig.PlaylistMode)
+        {
+            case PlaylistMode.Chrono:
+                PlaylistIndexCache.GetChronoOrRebuild(rootFolder, currentFile);
+                break;
+            case PlaylistMode.Rating:
+                PlaylistIndexCache.GetRating(rootFolder, DateTime.Now.Subtract(playlistConfig.TimeSpan));
+                break;
+        }
     }
 }

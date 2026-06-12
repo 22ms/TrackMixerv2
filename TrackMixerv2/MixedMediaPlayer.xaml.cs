@@ -74,6 +74,9 @@ namespace TrackMixerv2
 
         private void PlaylistConfig_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            if (currentVideo != null)
+                PrewarmPlaylistIndex(PlaylistConfig, currentVideo);
+
             if (PlaylistConfig.PlaylistMode == PlaylistMode.Chrono)
                 return;
             string newVideo = IsInRatings(PlaylistConfig, currentVideo);
@@ -195,6 +198,8 @@ namespace TrackMixerv2
             int generation = ++_openMediaGeneration;
             Dispose();
             currentVideo = filePath;
+            PlaylistIndexCache.NotifyMediaOpened(filePath, PlaylistConfig.SubfolderOnly);
+            PrewarmPlaylistIndex(PlaylistConfig, filePath);
             LocalSettingsStore.SetString(LocalSettingsStore.Keys.RecentVideo, currentVideo);
             StorageFile file;
             try
