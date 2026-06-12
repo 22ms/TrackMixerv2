@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
@@ -47,6 +48,8 @@ namespace TrackMixerv2
         private string currentVideo;
         private string preChangeVideo;
         private int _openMediaGeneration;
+        private DispatcherQueueTimer? _syncTimer;
+        private bool _isDisposing;
 
         public MixedMediaPlayer()
         {
@@ -54,6 +57,22 @@ namespace TrackMixerv2
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             PlaylistConfig = new PlaylistConfig();
             Loaded += MixedMediaPlayer_Loaded;
+        }
+
+        private void MediaPlayer_CurrentStateChanged(MediaPlayer sender, object args)
+        {
+            if (_isDisposing)
+                return;
+
+            if (sender.CurrentState == MediaPlayerState.Playing)
+            {
+                SyncTrackPlayersToMain(force: true);
+                StartSyncTimer();
+            }
+            else if (sender.CurrentState == MediaPlayerState.Paused)
+            {
+                StopSyncTimer();
+            }
         }
 
         private void MediaPlayer_MediaPlayerRateChanged(MediaPlayer sender, MediaPlayerRateChangedEventArgs args)
@@ -197,6 +216,7 @@ namespace TrackMixerv2
 
             int generation = ++_openMediaGeneration;
             Dispose();
+            _isDisposing = false;
             currentVideo = filePath;
             PlaylistIndexCache.NotifyMediaOpened(filePath, PlaylistConfig.SubfolderOnly);
             PrewarmPlaylistIndex(PlaylistConfig, filePath);
@@ -250,7 +270,7 @@ namespace TrackMixerv2
 
                         int currentIndex = i;
                         MediaPlayer mediaPlayer = new MediaPlayer();
-                        mediaPlayer.AutoPlay = true;
+                        mediaPlayer.AutoPlay = false;
                         MediaSource source = MediaSource.CreateFromStorageFile(file);
                         MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
                         mediaPlayer.Source = mainPlaybackItem;
@@ -265,6 +285,7 @@ namespace TrackMixerv2
 
                             (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
                             TrackPlayers.Add(trackPlayer);
+                            AlignTrackPlayerToMain(trackPlayer);
                             MediaOpened[currentIndex - 1] = true;
                             if (MediaOpened.All(x => x))
                             {
@@ -273,6 +294,7 @@ namespace TrackMixerv2
                                     if (generation != _openMediaGeneration)
                                         return;
 
+                                    SyncTrackPlayersToMain(force: true);
                                     List<MediaPlayer> list = new List<MediaPlayer>();
                                     list.Add(MainMediaPlayer.MediaPlayer);
                                     list.AddRange(TrackPlayers);
@@ -328,10 +350,7 @@ namespace TrackMixerv2
 
         private void MediaPlayer_SeekCompleted(MediaPlayer sender, object args)
         {
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                trackPlayer.Position = sender.Position;
-            }
+            SyncTrackPlayersToMain(force: true);
         }
 
         private void SystemMediaTransportControls_ButtonPressed(SystemMediaTransportControls sender, SystemMediaTransportControlsButtonPressedEventArgs args)
@@ -386,15 +405,19 @@ namespace TrackMixerv2
 
         public void PlayAll()
         {
+            SyncTrackPlayersToMain(force: true);
             MainMediaPlayer.MediaPlayer.Play();
             foreach (MediaPlayer trackPlayer in TrackPlayers)
             {
                 trackPlayer.Play();
             }
+
+            StartSyncTimer();
         }
 
         public void PauseAll()
         {
+            StopSyncTimer();
             MainMediaPlayer.MediaPlayer.Pause();
             foreach (MediaPlayer trackPlayer in TrackPlayers)
             {
@@ -547,6 +570,7 @@ namespace TrackMixerv2
                 if (MainMediaPlayer.MediaPlayer != null)
                 {
                     MainMediaPlayer.MediaPlayer.MediaOpened += MediaOpenedHandler;
+                    MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
                     MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed += SystemMediaTransportControls_ButtonPressed;
                     MainMediaPlayer.MediaPlayer.SeekCompleted += MediaPlayer_SeekCompleted;
                     MainMediaPlayer.MediaPlayer.MediaPlayerRateChanged += MediaPlayer_MediaPlayerRateChanged;
@@ -565,6 +589,7 @@ namespace TrackMixerv2
                 if (MainMediaPlayer.MediaPlayer != null)
                 {
                     MainMediaPlayer.MediaPlayer.MediaOpened -= MediaOpenedHandler;
+                    MainMediaPlayer.MediaPlayer.CurrentStateChanged -= MediaPlayer_CurrentStateChanged;
                     MainMediaPlayer.MediaPlayer.MediaFailed -= MediaFailedHandler;
                     MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed -= SystemMediaTransportControls_ButtonPressed;
                     MainMediaPlayer.MediaPlayer.SeekCompleted -= MediaPlayer_SeekCompleted;
@@ -592,16 +617,121 @@ namespace TrackMixerv2
 
         public static void OffsetMediaPlayerPlaybackPosition(MediaPlayer mediaPlayer, int offsetMillis)
         {
-            TimeSpan currentPosition = mediaPlayer.Position;
-            TimeSpan fastForwardTime = TimeSpan.FromMilliseconds(offsetMillis);
-            TimeSpan newPosition = currentPosition + fastForwardTime;
+            TimeSpan newPosition = AudioTrackSync.AddOffset(
+                mediaPlayer.Position,
+                offsetMillis,
+                mediaPlayer.NaturalDuration);
 
-            if (newPosition >= mediaPlayer.NaturalDuration)
+            if (newPosition == mediaPlayer.Position)
+                return;
+
+            mediaPlayer.Position = newPosition;
+        }
+
+        private void AlignTrackPlayerToMain(MediaPlayer trackPlayer)
+        {
+            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+                return;
+
+            try
+            {
+                trackPlayer.Position = mainPlayer.Position;
+                if (mainPlayer.CurrentState == MediaPlayerState.Playing)
+                    trackPlayer.Play();
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        private void SyncTrackPlayersToMain(bool force = false)
+        {
+            if (_isDisposing || TrackPlayers.Count == 0 || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+                return;
+
+            TimeSpan masterPosition;
+            try
+            {
+                masterPosition = mainPlayer.Position;
+            }
+            catch (COMException)
             {
                 return;
             }
 
-            mediaPlayer.Position = newPosition;
+            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            {
+                try
+                {
+                    if (force || AudioTrackSync.ShouldResync(
+                        masterPosition,
+                        trackPlayer.Position,
+                        AudioTrackSync.DefaultResyncThreshold))
+                    {
+                        trackPlayer.Position = masterPosition;
+                    }
+                }
+                catch (COMException)
+                {
+                }
+            }
+        }
+
+        private bool TryGetMainMediaPlayer(out MediaPlayer? mediaPlayer)
+        {
+            mediaPlayer = null;
+            if (MainMediaPlayer == null)
+                return false;
+
+            try
+            {
+                mediaPlayer = MainMediaPlayer.MediaPlayer;
+                return mediaPlayer != null;
+            }
+            catch (COMException)
+            {
+                return false;
+            }
+        }
+
+        private void StartSyncTimer()
+        {
+            if (_syncTimer != null)
+                return;
+
+            _syncTimer = dispatcherQueue.CreateTimer();
+            _syncTimer.Interval = AudioTrackSync.SyncCheckInterval;
+            _syncTimer.Tick += SyncTimer_Tick;
+            _syncTimer.Start();
+        }
+
+        private void StopSyncTimer()
+        {
+            if (_syncTimer == null)
+                return;
+
+            _syncTimer.Stop();
+            _syncTimer.Tick -= SyncTimer_Tick;
+            _syncTimer = null;
+        }
+
+        private void SyncTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+                return;
+
+            try
+            {
+                if (mainPlayer.CurrentState != MediaPlayerState.Playing)
+                    return;
+            }
+            catch (COMException)
+            {
+                StopSyncTimer();
+                return;
+            }
+
+            SyncTrackPlayersToMain();
         }
 
         public void FastForward(int timeMillis)
@@ -623,16 +753,24 @@ namespace TrackMixerv2
 
         public void Dispose()
         {
+            _isDisposing = true;
+            StopSyncTimer();
             DeRegisterPlayerEvents();
             DeRegisterControlEvents();
             MediaOpened = new List<bool>();
             MediaOpenedHandler = null;
             MediaFailedHandler = null;
 
-            if (MainMediaPlayer?.MediaPlayer != null)
+            if (TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
             {
-                MainMediaPlayer.MediaPlayer.Pause();
-                MainMediaPlayer.MediaPlayer.Source = null;
+                try
+                {
+                    mainPlayer.Pause();
+                    mainPlayer.Source = null;
+                }
+                catch (COMException)
+                {
+                }
             }
 
             if (TrackPlayers != null)
