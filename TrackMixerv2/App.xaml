@@ -18,7 +18,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Strings and brushes -->
-            <x:String x:Key="AppTitleName">Track Mixer</x:String>
+            <x:String x:Key="AppTitleName">Track Mixer (Beta)</x:String>
             <SolidColorBrush x:Key="WindowCaptionBackground">Transparent</SolidColorBrush>
             <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled">Transparent</SolidColorBrush>
             <SolidColorBrush x:Key="WindowCaptionForeground">White</SolidColorBrush>

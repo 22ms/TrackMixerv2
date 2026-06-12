@@ -42,6 +42,8 @@ namespace TrackMixerv2
             InitializeComponent();
             if (UiTestBootstrap.IsEnabled)
                 Title = "Track Mixer UI Test";
+            else
+                Title = (string)Application.Current.Resources["AppTitleName"];
             AppPaths.EnsureDataDirectory();
             string metadataPath = AppState.TrackMetadataJson;
             string metadataDirectory = Path.GetDirectoryName(metadataPath);

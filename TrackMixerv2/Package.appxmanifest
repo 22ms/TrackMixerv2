@@ -15,7 +15,7 @@
   <mp:PhoneIdentity PhoneProductId="6b6aa316-8f3a-4411-8714-7239e8d3bb99" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>Track Mixer</DisplayName>
+    <DisplayName>Track Mixer (Beta)</DisplayName>
     <PublisherDisplayName>doppelzwei</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -34,12 +34,12 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="Track Mixer"
+        DisplayName="Track Mixer (Beta)"
         Description="Track Mixer is the ultimate media player designed for gamers and content creators who need a fast, efficient way to review multi-track gaming clips. Perfect for videos recorded with tools like NVIDIA Shadowplay or OBS, it plays back all audio tracks simultaneously while giving you individual volume sliders for each track. Its tab-based navigation ensures effortless browsing, while powerful features like playlist filtering and clip rating make organizing and reviewing your content a breeze."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"  Square71x71Logo="Assets\SmallTile.png" Square310x310Logo="Assets\LargeTile.png" ShortName="Track Mixer">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"  Square71x71Logo="Assets\SmallTile.png" Square310x310Logo="Assets\LargeTile.png" ShortName="Track Mixer (Beta)">
         </uap:DefaultTile >
         <uap:SplashScreen Image="Assets\SplashScreen.png"  BackgroundColor="transparent"/>
         <uap:InitialRotationPreference>
