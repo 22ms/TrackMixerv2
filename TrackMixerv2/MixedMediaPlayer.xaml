@@ -23,15 +23,15 @@
         AreTransportControlsEnabled="True"
         Stretch="Uniform" CanDrag="True">
             <MediaPlayerElement.TransportControls>
-                <local:MixedMediaPlayerControl x:Name="myMixedMediaPlayerControl" x:FieldModifier="public"
+                <local:MixedMediaPlayerControl x:Name="customMixedMediaPlayerControl" x:FieldModifier="public"
                                                IsNextTrackButtonVisible="True"
                                                IsPreviousTrackButtonVisible="True"
-                                               IsPlaybackRateEnabled="True"
-                                               IsPlaybackRateButtonVisible="True"
+                                               IsPlaybackRateEnabled="False"
+                                               IsPlaybackRateButtonVisible="False"
                                                IsCompact="False"
                                                IsZoomButtonVisible="False"
                                                IsZoomEnabled="False"
-                                               Style="{StaticResource myTransportControlsStyle}"
+                                               Style="{StaticResource customTransportControlsStyle}"
                                                >
                 </local:MixedMediaPlayerControl>
             </MediaPlayerElement.TransportControls>

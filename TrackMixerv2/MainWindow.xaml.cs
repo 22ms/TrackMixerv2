@@ -30,7 +30,11 @@ namespace TrackMixerv2
         public static MainWindow Instance;
         private MixedMediaPlayer _fullScreenPlayer;
         private FrameworkElement _fullScreenPlayerHost;
+        private MixerPage _fullScreenMixerPage;
         public bool IsPlayerFullScreen { get; private set; }
+
+        internal MixerPage? ActiveMixerPage =>
+            TabView.SelectedItem is TabViewItem { Content: MixerPage page } ? page : null;
 
         public MainWindow(string[] files)
         {
@@ -76,6 +80,45 @@ namespace TrackMixerv2
                     args.WindowActivationState == WindowActivationState.CodeActivated ||
                     args.WindowActivationState == WindowActivationState.PointerActivated;
             };
+
+            KeybindApplicator.ApplyToMainWindow(this);
+        }
+
+        public Task ExportActiveTabAsync() => ExportCurrentFileAsync();
+
+        internal void ExitPlayerFullScreenFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
+        {
+            if (!IsPlayerFullScreen)
+                return;
+
+            ExitPlayerFullScreen();
+            args?.Handled = true;
+        }
+
+        internal void NewTabFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
+        {
+            TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
+            args?.Handled = true;
+        }
+
+        internal void CloseTabFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
+        {
+            CloseTab(TabView.SelectedItem as TabViewItem);
+            args?.Handled = true;
+        }
+
+        internal void NextTabFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
+        {
+            if (TabView.TabItems.Count > TabView.SelectedIndex + 1)
+                TabView.SelectedItem = TabView.TabItems[TabView.SelectedIndex + 1];
+            args?.Handled = true;
+        }
+
+        internal void PreviousTabFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
+        {
+            if (TabView.SelectedIndex - 1 >= 0)
+                TabView.SelectedItem = TabView.TabItems[TabView.SelectedIndex - 1];
+            args?.Handled = true;
         }
 
         private void TabView_TabItemsChanged(TabView sender, Windows.Foundation.Collections.IVectorChangedEventArgs args)
@@ -121,7 +164,9 @@ namespace TrackMixerv2
             PlayerFullScreenHost.Children.Add(player);
             PlayerFullScreenOverlay.Visibility = Visibility.Visible;
             TabView.Visibility = Visibility.Collapsed;
+            _fullScreenMixerPage = FindMixerPageForPlayer(player);
             player.SetFullScreenButtonState(true);
+            _fullScreenMixerPage?.SetFullscreenTransportToolsVisible(true);
             AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
             IsPlayerFullScreen = true;
         }
@@ -137,11 +182,24 @@ namespace TrackMixerv2
 
             PlayerFullScreenOverlay.Visibility = Visibility.Collapsed;
             TabView.Visibility = Visibility.Visible;
+            _fullScreenMixerPage?.SetFullscreenTransportToolsVisible(false);
             _fullScreenPlayer.SetFullScreenButtonState(false);
             AppWindow.SetPresenter(AppWindowPresenterKind.Default);
             IsPlayerFullScreen = false;
             _fullScreenPlayer = null;
             _fullScreenPlayerHost = null;
+            _fullScreenMixerPage = null;
+        }
+
+        private MixerPage FindMixerPageForPlayer(MixedMediaPlayer player)
+        {
+            foreach (object item in TabView.TabItems)
+            {
+                if (item is TabViewItem tab && tab.Content is MixerPage page && page.MixedMediaPlayer == player)
+                    return page;
+            }
+
+            return null;
         }
 
         public void ExitPlayerFullScreenIfShowing(MixedMediaPlayer player)
@@ -342,7 +400,7 @@ namespace TrackMixerv2
             page.ExportFlyout.Click += MenuFlyoutItem_Click;
             newTab.Content = page;
 
-            Style tabStyle = (Style)Application.Current.Resources["myTabViewItem"];
+            Style tabStyle = (Style)Application.Current.Resources["customTabViewItem"];
             newTab.Style = tabStyle;
             return newTab;
         }

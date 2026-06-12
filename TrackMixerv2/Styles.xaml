@@ -9,6 +9,114 @@
         <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
     </ResourceDictionary.MergedDictionaries>
 
+    <!-- Scoped to selection flyouts only (autoplay, speed, playlist sort) — not app-wide. -->
+    <Style x:Key="CompactMenuFlyoutPresenterStyle"
+           TargetType="MenuFlyoutPresenter"
+           BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="CompactSelectionFlyoutRadioItemStyle"
+           TargetType="RadioMenuFlyoutItem"
+           BasedOn="{StaticResource DefaultRadioMenuFlyoutItemStyle}">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Padding" Value="{StaticResource MenuFlyoutItemThemePaddingNarrow}" />
+    </Style>
+
+    <SolidColorBrush x:Key="DestructiveFillColorDefaultBrush" Color="{ThemeResource SystemFillColorCritical}" />
+    <SolidColorBrush x:Key="DestructiveFillColorSecondaryBrush" Color="{ThemeResource SystemFillColorCritical}" Opacity="0.9" />
+    <SolidColorBrush x:Key="DestructiveFillColorTertiaryBrush" Color="{ThemeResource SystemFillColorCritical}" Opacity="0.8" />
+    <StaticResource x:Key="DestructiveButtonBackground" ResourceKey="DestructiveFillColorDefaultBrush" />
+    <StaticResource x:Key="DestructiveButtonBackgroundPointerOver" ResourceKey="DestructiveFillColorSecondaryBrush" />
+    <StaticResource x:Key="DestructiveButtonBackgroundPressed" ResourceKey="DestructiveFillColorTertiaryBrush" />
+    <StaticResource x:Key="DestructiveButtonBackgroundDisabled" ResourceKey="AccentFillColorDisabledBrush" />
+    <StaticResource x:Key="DestructiveButtonForeground" ResourceKey="TextOnAccentFillColorPrimaryBrush" />
+    <StaticResource x:Key="DestructiveButtonForegroundPointerOver" ResourceKey="TextOnAccentFillColorPrimaryBrush" />
+    <StaticResource x:Key="DestructiveButtonForegroundPressed" ResourceKey="TextOnAccentFillColorSecondaryBrush" />
+    <StaticResource x:Key="DestructiveButtonForegroundDisabled" ResourceKey="TextOnAccentFillColorDisabled" />
+    <StaticResource x:Key="DestructiveButtonBorderBrush" ResourceKey="AccentControlElevationBorderBrush" />
+    <StaticResource x:Key="DestructiveButtonBorderBrushPointerOver" ResourceKey="AccentControlElevationBorderBrush" />
+    <StaticResource x:Key="DestructiveButtonBorderBrushPressed" ResourceKey="ControlFillColorTransparentBrush" />
+    <StaticResource x:Key="DestructiveButtonBorderBrushDisabled" ResourceKey="ControlFillColorTransparentBrush" />
+
+    <Style x:Key="DestructiveButtonStyle" TargetType="Button">
+        <Setter Property="Foreground" Value="{ThemeResource DestructiveButtonForeground}" />
+        <Setter Property="Background" Value="{ThemeResource DestructiveButtonBackground}" />
+        <Setter Property="BackgroundSizing" Value="OuterBorderEdge" />
+        <Setter Property="BorderBrush" Value="{ThemeResource DestructiveButtonBorderBrush}" />
+        <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter x:Name="ContentPresenter"
+                                      Background="{TemplateBinding Background}"
+                                      BackgroundSizing="{TemplateBinding BackgroundSizing}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      ContentTransitions="{TemplateBinding ContentTransitions}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Padding="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      AutomationProperties.AccessibilityView="Raw">
+                        <ContentPresenter.BackgroundTransition>
+                            <BrushTransition Duration="0:0:0.083" />
+                        </ContentPresenter.BackgroundTransition>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonBackgroundPointerOver}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="BorderBrush">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonBorderBrushPointerOver}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonForegroundPointerOver}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonBackgroundPressed}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="BorderBrush">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonBorderBrushPressed}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonForegroundPressed}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Background">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonBackgroundDisabled}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="BorderBrush">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonBorderBrushDisabled}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ContentPresenter" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource DestructiveButtonForegroundDisabled}" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </ContentPresenter>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Name="VolumeControlStackPanelStyle" TargetType="StackPanel">
         <!--<Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefault}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -19,7 +127,7 @@
         
     </Style>
 
-    <Style x:Key="myTransportControlsStyle"
+    <Style x:Key="customTransportControlsStyle"
            TargetType="MediaTransportControls">
         <Setter Property="IsTabStop"
                 Value="False" />
@@ -72,7 +180,7 @@
                                    TargetType="CommandBar"
                                    BasedOn="{StaticResource DefaultCommandBarStyle}">
                                 <Setter Property="Background"
-                                        Value="Transparent" />
+                                        Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
                                 <Setter Property="DefaultLabelPosition"
                                         Value="Collapsed" />
                             </Style>
@@ -171,7 +279,7 @@
                                                          Storyboard.TargetProperty="Opacity"
                                                          To="0"
                                                          Duration="0" />
-                                        <DoubleAnimation Storyboard.TargetName="MediaControlsCommandBar"
+                                        <DoubleAnimation Storyboard.TargetName="TransportCommandsRoot"
                                                          Storyboard.TargetProperty="Opacity"
                                                          To="0"
                                                          Duration="0" />
@@ -234,21 +342,29 @@
                                     <VisualState.Setters>
                                         <Setter Target="LeftSidePlayBorder.Visibility"
                                                 Value="Visible" />
-                                        <Setter Target="TimeTextGrid.Visibility"
+                                        <Setter Target="TimeElapsedElement.Visibility"
                                                 Value="Collapsed" />
+                                        <Setter Target="TimeRemainingElement.Visibility"
+                                                Value="Collapsed" />
+                                        <Setter Target="MediaTransportControls_Timeline_Border.(Grid.Column)"
+                                                Value="1" />
+                                        <Setter Target="MediaTransportControls_Timeline_Border.(Grid.ColumnSpan)"
+                                                Value="1" />
                                         <Setter Target="MediaTransportControls_Command_Border.(Grid.Column)"
                                                 Value="2" />
+                                        <Setter Target="MediaTransportControls_Command_Border.(Grid.ColumnSpan)"
+                                                Value="1" />
                                         <Setter Target="MediaTransportControls_Command_Border.(Grid.Row)"
                                                 Value="1" />
                                         <Setter Target="ControlPanelGrid.Height"
                                                 Value="48" />
-                                        <Setter Target="MediaControlsCommandBar.Margin"
+                                        <Setter Target="TransportCommandsRoot.Margin"
                                                 Value="0" />
                                         <Setter Target="PlayPauseButton.Visibility"
                                                 Value="Collapsed" />
                                         <Setter Target="ProgressSlider.Margin"
                                                 Value="{ThemeResource MediaTransportControlsProgressSliderCompactMargin}" />
-                                        <Setter Target="ControlPanelGrid.Padding"
+                                        <Setter Target="ControlPanel_ControlPanelVisibilityStates_Border.Padding"
                                                 Value="3" />
                                     </VisualState.Setters>
                                 </VisualState>
@@ -306,13 +422,12 @@
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                        <Border x:Name="ControlPanel_ControlPanelVisibilityStates_Border">
+                        <Border x:Name="ControlPanel_ControlPanelVisibilityStates_Border"
+                                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                                VerticalAlignment="Bottom"
+                                Padding="14,8,14,6">
                             <Grid x:Name="ControlPanelGrid"
-                                  Background="{ThemeResource MediaTransportControlsBorderBrush}"
-                                  VerticalAlignment="Bottom"
-                                  RenderTransformOrigin="0.5,0.5"
-                                  BorderBrush="{ThemeResource MediaTransportControlsBorderBrush}"
-                                  >
+                                  RenderTransformOrigin="0.5,0.5">
                                 <!--BorderThickness="{ThemeResource MediaTransportControlsBorderThickness}"
                                   CornerRadius="{TemplateBinding CornerRadius}"-->
                                 <Grid.RenderTransform>
@@ -325,7 +440,7 @@
                                 </Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <Border x:Name="ErrorBorder"
@@ -341,47 +456,48 @@
                                                Margin="12" />
                                 </Border>
                                 <Border x:Name="MediaTransportControls_Timeline_Border"
-                                        Grid.Column="1"
-                                        Grid.Row="1">
-                                    <Grid x:Name="MediaTransportControls_Timeline_Grid">
+                                        Grid.ColumnSpan="3"
+                                        Grid.Row="1"
+                                        HorizontalAlignment="Stretch">
+                                    <Grid x:Name="MediaTransportControls_Timeline_Grid"
+                                          VerticalAlignment="Center"
+                                          UseLayoutRounding="True">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="64" />
                                         </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <!--<Border x:Name="Marker" Canvas.ZIndex="0" Height="20" Width="3" Background="#cceb4034" VerticalAlignment="Center">
-                                        </Border>-->
-                                        <Slider x:Name="ProgressSlider"
-                                                Margin="7,2,7,1"
-                                                MinWidth="80"
-                                                Height="{ThemeResource MediaTransportControlsSliderHeight}"
-                                                VerticalAlignment="Center"
-                                                IsThumbToolTipEnabled="False" />
-                                        <ProgressBar x:Name="BufferingProgressBar"
-                                                     Height="4"
-                                                     IsIndeterminate="True"
-                                                     IsHitTestVisible="False"
-                                                     VerticalAlignment="Top"
-                                                     Margin="0,2,0,0"
-                                                     Visibility="Collapsed" />
-                                        <Grid x:Name="TimeTextGrid"
-                                              Margin="7,0,7,2"
-                                              Grid.Row="1"
-                                              Height="16">
-                                            <TextBlock x:Name="TimeElapsedElement"
-                                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                                       Margin="0"
-                                                       Text="00:00"
-                                                       HorizontalAlignment="Left"
-                                                       VerticalAlignment="Bottom" />
-                                            <TextBlock x:Name="TimeRemainingElement"
-                                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                                       Text="00:00"
-                                                       HorizontalAlignment="Right"
-                                                       VerticalAlignment="Bottom" />
+                                        <TextBlock x:Name="TimeElapsedElement"
+                                                   Grid.Column="0"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   FontFamily="Consolas"
+                                                   Margin="0,0,10,0"
+                                                   Text="00:00"
+                                                   TextAlignment="Right"
+                                                   VerticalAlignment="Center" />
+                                        <Grid Grid.Column="1"
+                                              VerticalAlignment="Center">
+                                            <Slider x:Name="ProgressSlider"
+                                                    MinWidth="80"
+                                                    Height="{ThemeResource MediaTransportControlsSliderHeight}"
+                                                    VerticalAlignment="Center"
+                                                    IsThumbToolTipEnabled="False" />
+                                            <ProgressBar x:Name="BufferingProgressBar"
+                                                         Height="4"
+                                                         IsIndeterminate="True"
+                                                         IsHitTestVisible="False"
+                                                         VerticalAlignment="Top"
+                                                         Margin="0,2,0,0"
+                                                         Visibility="Collapsed" />
                                         </Grid>
+                                        <TextBlock x:Name="TimeRemainingElement"
+                                                   Grid.Column="2"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   FontFamily="Consolas"
+                                                   Margin="10,0,0,0"
+                                                   Text="00:00"
+                                                   TextAlignment="Left"
+                                                   VerticalAlignment="Center" />
                                     </Grid>
                                 </Border>
                                 <Border x:Name="LeftSidePlayBorder"
@@ -403,212 +519,245 @@
                                     </AppBarButton>
                                 </Border>
                                 <Border x:Name="MediaTransportControls_Command_Border"
-                                        Grid.Column="1"
-                                        Grid.Row="2">
-                                    <CommandBar x:Name="MediaControlsCommandBar"
-                                                Margin="0,3"
-                                                Style="{StaticResource CommandBarStyle}"
-                                                IsDynamicOverflowEnabled="False">
-                                        <CommandBar.Resources>
-                                            <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
-                                            <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
-                                            <x:Double x:Key="AppBarThemeCompactHeight">40</x:Double>
-                                            <x:Double x:Key="AppBarMoreButtonColumnMinWidth">0</x:Double>
-                                        </CommandBar.Resources>
-                                        <CommandBar.PrimaryCommands>
-                                            <!--<AppBarButton x:Name="VolumeMuteButton"
+                                        Grid.ColumnSpan="3"
+                                        Grid.Row="2"
+                                        HorizontalAlignment="Stretch">
+                                    <Grid>
+                                    <Grid x:Name="TransportCommandsRoot"
+                                          Margin="0,3"
+                                          VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0"
+                                                    Orientation="Horizontal"
+                                                    HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center">
+                                            <AppBarButton x:Name="TrackVolumeButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="19">
+                                                          ToolTipService.ToolTip="Track volumes">
+                                                <AppBarButton.Resources>
+                                                    <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                    <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                                </AppBarButton.Resources>
                                                 <AppBarButton.Flyout>
-                                                    <Flyout x:Name="VolumeFlyout"
-                                                            FlyoutPresenterStyle="{StaticResource FlyoutStyle}"
-                                                            ShouldConstrainToRootBounds="False">
-                                                        <StackPanel Orientation="Horizontal"
-                                                                    Padding="3,11">
-                                                            <AppBarButton x:Name="AudioMuteButton"
-                                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                                          VerticalAlignment="Center"
-                                                                          HorizontalAlignment="Center">
-                                                                <AppBarButton.Resources>
-                                                                    <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
-                                                                    <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
-                                                                </AppBarButton.Resources>
-                                                                <AppBarButton.Icon>
-                                                                    <SymbolIcon x:Name="AudioMuteSymbol"
-                                                                                Symbol="Volume" />
-                                                                </AppBarButton.Icon>
-                                                            </AppBarButton>
-                                                            <Slider x:Name="VolumeSlider"
-                                                                    Value="50"
-                                                                    IsThumbToolTipEnabled="False"
-                                                                    Height="{ThemeResource MediaTransportControlsSliderHeight}"
-                                                                    Width="{ThemeResource MediaTransportControlsSliderWidth}"
-                                                                    VerticalAlignment="Center"
-                                                                    HorizontalAlignment="Center"
-                                                                    Margin="12,0,8,0" />
-                                                            <TextBlock x:Name="VolumeValue"
-                                                                       Style="{StaticResource MediaTextBlockStyle}"
-                                                                       Text="{Binding ElementName=VolumeSlider,Path=Value}"
-                                                                       HorizontalAlignment="Center"
-                                                                       VerticalAlignment="Center"
-                                                                       TextAlignment="Right"
-                                                                       Width="24"
-                                                                       Margin="8,0,16,0" />
-                                                        </StackPanel>
+                                                    <Flyout FlyoutPresenterStyle="{StaticResource FlyoutStyle}"
+                                                            Placement="Top">
+                                                        <StackPanel x:Name="TrackVolumeFlyoutContent"
+                                                                    MinWidth="300"
+                                                                    Padding="12,10"
+                                                                    Spacing="6" />
                                                     </Flyout>
                                                 </AppBarButton.Flyout>
-                                                <AppBarButton.Icon>
-                                                    <SymbolIcon x:Name="VolumeMuteSymbol"
-                                                                Symbol="Volume" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>-->
-                                            <AppBarButton x:Name="CCSelectionButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="15"
-                                                          Visibility="Collapsed">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
-                                                </AppBarButton.Icon>
+                                                <SymbolIcon Symbol="Volume" />
                                             </AppBarButton>
-                                            <!--<AppBarButton x:Name="AudioTracksSelectionButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="13"
-                                                          Visibility="Collapsed">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>-->
-                                            <AppBarSeparator x:Name="LeftSeparator"
-                                                             Height="0"
-                                                             Width="0"
-                                                             Margin="0,0" />
-                                            <AppBarButton x:Name="StopButton"
-                                                          Icon="Stop"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="7"
-                                                          Visibility="Collapsed" />
-                                            <AppBarButton x:Name="SkipBackwardButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="5"
-                                                          Visibility="Collapsed">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarSeparator Height="0" Width="30" />
                                             <AppBarButton x:Name="PreviousTrackButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="3"
-                                                          Visibility="Collapsed">
+                                                          MediaTransportControlsHelper.DropoutOrder="3">
+                                                <AppBarButton.Resources>
+                                                    <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                    <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                                </AppBarButton.Resources>
                                                 <AppBarButton.Icon>
                                                     <FontIcon Glyph="&#xF8AC;" />
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
-                                            <AppBarButton x:Name="RewindButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="1"
-                                                          Visibility="Collapsed">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="&#xEB9E;" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarButton x:Name="PlayPauseButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="23">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon x:Name="PlayPauseSymbol"
-                                                              Glyph="&#xF5B0;" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarButton x:Name="FastForwardButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="1"
-                                                          Visibility="Collapsed">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarButton x:Name="NextTrackButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="3"
-                                                          AutomationProperties.AutomationId="NextTrackButton"
-                                                          Visibility="Collapsed"
-                                                          >
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="&#xF8AD;" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarButton x:Name="SkipForwardButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="5"
-                                                          Visibility="Collapsed">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="&#xEB9D;" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarButton x:Name="PlaybackRateButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="10"
-                                                          Visibility="Visible">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="&#xEC58;" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>
-                                            <AppBarSeparator x:Name="RightSeparator"
-                                                             Height="0"
-                                                             Width="0"
-                                                             Margin="0,0" />
-                                            <AppBarToggleButton x:Name="RepeatButton"
-                                                                Style="{StaticResource AppBarToggleButtonStyle}"
-                                                                MediaTransportControlsHelper.DropoutOrder="1"
-                                                                Visibility="Collapsed">
-                                                <AppBarToggleButton.Icon>
-                                                    <SymbolIcon x:Name="RepeatSymbol"
-                                                                Symbol="RepeatAll" />
-                                                </AppBarToggleButton.Icon>
-                                            </AppBarToggleButton>
-                                            <AppBarButton x:Name="AutoplayButton"
-                                                  Style="{StaticResource AppBarButtonStyle}"
-                                                  MediaTransportControlsHelper.DropoutOrder="8"
-                                                ToolTipService.ToolTip="Select autoplay mode">
-                                                <AppBarButton.Content>
-                                                    <Grid>
-                                                        <FontIcon Glyph="&#xE895;" />
-                                                        <FontIcon x:Name="AutoplaySmallIcon" Glyph="&#xE8BB;" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="8"/>
-                                                    </Grid>
-                                                </AppBarButton.Content>
-                                                <AppBarButton.Flyout>
-                                                    <MenuFlyout Placement="Top">
-                                                        <MenuFlyoutItem x:Name="AutoplayForwardOption" Text="Forward" Tag="forward">
-                                                            <MenuFlyoutItem.Icon>
-                                                                <FontIcon Glyph="&#xEA47;"/>
-                                                            </MenuFlyoutItem.Icon>
-                                                        </MenuFlyoutItem>
-                                                        <MenuFlyoutItem x:Name="AutoplayBackwardOption" Text="Backward" Tag="backward">
-                                                            <MenuFlyoutItem.Icon>
-                                                                <FontIcon Glyph="&#xE830;"/>
-                                                            </MenuFlyoutItem.Icon>
-                                                        </MenuFlyoutItem>
-                                                        <MenuFlyoutItem x:Name="AutoplayOffOption" Text="Off" Tag="off">
-                                                            <MenuFlyoutItem.Icon>
-                                                                <FontIcon Glyph="&#xE8BB;"/>
-                                                            </MenuFlyoutItem.Icon>
-                                                        </MenuFlyoutItem>
-                                                    </MenuFlyout>
-
-                                                </AppBarButton.Flyout>
-                                            </AppBarButton>
+                                        </StackPanel>
+                                        <AppBarButton x:Name="PlayPauseButton"
+                                                      Grid.Column="1"
+                                                      Style="{StaticResource AppBarButtonStyle}"
+                                                      MediaTransportControlsHelper.DropoutOrder="23"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center">
+                                            <AppBarButton.Resources>
+                                                <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                            </AppBarButton.Resources>
+                                            <AppBarButton.Icon>
+                                                <FontIcon x:Name="PlayPauseSymbol"
+                                                          Glyph="&#xF5B0;" />
+                                            </AppBarButton.Icon>
+                                        </AppBarButton>
+                                        <Grid Grid.Column="2"
+                                              VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0"
+                                                        Orientation="Horizontal"
+                                                        HorizontalAlignment="Left"
+                                                        VerticalAlignment="Center">
+                                                <AppBarButton x:Name="NextTrackButton"
+                                                              Style="{StaticResource AppBarButtonStyle}"
+                                                              MediaTransportControlsHelper.DropoutOrder="3"
+                                                              AutomationProperties.AutomationId="NextTrackButton">
+                                                    <AppBarButton.Resources>
+                                                        <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                        <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                                    </AppBarButton.Resources>
+                                                    <AppBarButton.Icon>
+                                                        <FontIcon Glyph="&#xF8AD;" />
+                                                    </AppBarButton.Icon>
+                                                </AppBarButton>
+                                                <AppBarButton x:Name="AutoplayButton"
+                                                              Style="{StaticResource AppBarButtonStyle}"
+                                                              MediaTransportControlsHelper.DropoutOrder="8"
+                                                              ToolTipService.ToolTip="Select autoplay mode">
+                                                    <AppBarButton.Resources>
+                                                        <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                        <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                                    </AppBarButton.Resources>
+                                                    <AppBarButton.Content>
+                                                        <Grid>
+                                                            <FontIcon Glyph="&#xE895;" />
+                                                            <FontIcon x:Name="AutoplaySmallIcon"
+                                                                      Glyph="&#xE8BB;"
+                                                                      HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center"
+                                                                      FontSize="8" />
+                                                        </Grid>
+                                                    </AppBarButton.Content>
+                                                    <AppBarButton.Flyout>
+                                                        <MenuFlyout Placement="Top"
+                                                                    MenuFlyoutPresenterStyle="{StaticResource CompactMenuFlyoutPresenterStyle}">
+                                                            <RadioMenuFlyoutItem x:Name="AutoplayForwardOption"
+                                                                                 Style="{StaticResource CompactSelectionFlyoutRadioItemStyle}"
+                                                                                 Text="Forward"
+                                                                                 GroupName="AutoplayMode"
+                                                                                 Tag="forward" />
+                                                            <RadioMenuFlyoutItem x:Name="AutoplayBackwardOption"
+                                                                                 Style="{StaticResource CompactSelectionFlyoutRadioItemStyle}"
+                                                                                 Text="Backward"
+                                                                                 GroupName="AutoplayMode"
+                                                                                 Tag="backward" />
+                                                            <RadioMenuFlyoutItem x:Name="AutoplayOffOption"
+                                                                                 Style="{StaticResource CompactSelectionFlyoutRadioItemStyle}"
+                                                                                 Text="Off"
+                                                                                 GroupName="AutoplayMode"
+                                                                                 Tag="off"
+                                                                                 IsChecked="True" />
+                                                        </MenuFlyout>
+                                                    </AppBarButton.Flyout>
+                                                </AppBarButton>
+                                                <!-- Not named PlaybackRateButton — MTC hijacks that name and replaces the flyout. -->
+                                                <AppBarButton x:Name="SpeedSelectButton"
+                                                              Style="{StaticResource AppBarButtonStyle}"
+                                                              MediaTransportControlsHelper.DropoutOrder="10"
+                                                              ToolTipService.ToolTip="Playback speed">
+                                                    <AppBarButton.Resources>
+                                                        <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                        <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                                    </AppBarButton.Resources>
+                                                    <AppBarButton.Icon>
+                                                        <FontIcon Glyph="&#xEC58;" />
+                                                    </AppBarButton.Icon>
+                                                    <AppBarButton.Flyout>
+                                                        <MenuFlyout x:Name="SpeedSelectMenuFlyout"
+                                                                    Placement="Top"
+                                                                    MenuFlyoutPresenterStyle="{StaticResource CompactMenuFlyoutPresenterStyle}" />
+                                                    </AppBarButton.Flyout>
+                                                </AppBarButton>
+                                            </StackPanel>
                                             <AppBarButton x:Name="FullScreenButton"
+                                                          Grid.Column="1"
                                                           Style="{StaticResource AppBarButtonStyle}"
                                                           MediaTransportControlsHelper.DropoutOrder="9"
                                                           AutomationProperties.AutomationId="FullScreenButton"
-                                                          ToolTipService.ToolTip="Fullscreen">
+                                                          ToolTipService.ToolTip="Fullscreen"
+                                                          HorizontalAlignment="Right">
+                                                <AppBarButton.Resources>
+                                                    <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
+                                                    <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
+                                                </AppBarButton.Resources>
                                                 <AppBarButton.Icon>
-                                                    <FontIcon x:Name="FullScreenSymbol" Glyph="&#xE740;" />
+                                                    <FontIcon x:Name="FullScreenSymbol"
+                                                              Glyph="&#xE740;" />
                                                 </AppBarButton.Icon>
+                                            </AppBarButton>
+                                        </Grid>
+                                    </Grid>
+                                    <StackPanel x:Name="FullscreenMixerToolsHost"
+                                                Orientation="Horizontal"
+                                                Spacing="4"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Center"
+                                                Visibility="Collapsed"
+                                                IsHitTestVisible="True">
+                                        <StackPanel x:Name="FullscreenMixerToolsLeadingHost"
+                                                    Orientation="Horizontal"
+                                                    Spacing="4"
+                                                    VerticalAlignment="Center" />
+                                        <Border Width="1"
+                                                Height="24"
+                                                Margin="4,0"
+                                                VerticalAlignment="Center"
+                                                Background="{ThemeResource DividerStrokeColorDefault}" />
+                                        <StackPanel x:Name="FullscreenMixerToolsTrailingHost"
+                                                    Orientation="Horizontal"
+                                                    Spacing="6"
+                                                    VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <CommandBar x:Name="MediaControlsCommandBar"
+                                                Visibility="Collapsed"
+                                                IsHitTestVisible="False"
+                                                Style="{StaticResource CommandBarStyle}">
+                                        <CommandBar.PrimaryCommands>
+                                            <AppBarButton x:Name="CCSelectionButton"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed">
+                                                <FontIcon Glyph="?" />
+                                            </AppBarButton>
+                                            <AppBarSeparator x:Name="LeftSeparator"
+                                                             Height="0"
+                                                             Width="0" />
+                                            <AppBarButton x:Name="StopButton"
+                                                          Icon="Stop"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed" />
+                                            <AppBarButton x:Name="SkipBackwardButton"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed">
+                                                <FontIcon Glyph="?" />
+                                            </AppBarButton>
+                                            <AppBarButton x:Name="RewindButton"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed">
+                                                <FontIcon Glyph="&#xEB9E;" />
+                                            </AppBarButton>
+                                            <AppBarButton x:Name="FastForwardButton"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed">
+                                                <FontIcon Glyph="?" />
+                                            </AppBarButton>
+                                            <AppBarButton x:Name="SkipForwardButton"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed">
+                                                <FontIcon Glyph="&#xEB9D;" />
+                                            </AppBarButton>
+                                            <AppBarSeparator x:Name="RightSeparator"
+                                                             Height="0"
+                                                             Width="0" />
+                                            <AppBarToggleButton x:Name="RepeatButton"
+                                                                Style="{StaticResource AppBarToggleButtonStyle}"
+                                                                Visibility="Collapsed">
+                                                <SymbolIcon x:Name="RepeatSymbol"
+                                                            Symbol="RepeatAll" />
+                                            </AppBarToggleButton>
+                                            <AppBarButton x:Name="VolumeMuteButton"
+                                                          Style="{StaticResource AppBarButtonStyle}"
+                                                          Visibility="Collapsed">
+                                                <SymbolIcon x:Name="VolumeMuteSymbol"
+                                                            Symbol="Volume" />
                                             </AppBarButton>
                                         </CommandBar.PrimaryCommands>
                                     </CommandBar>
+                                    <Slider x:Name="VolumeSlider"
+                                            Visibility="Collapsed"
+                                            Value="50" />
+                                    </Grid>
                                 </Border>
                             </Grid>
                         </Border>
@@ -617,6 +766,10 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- Selected tab seam: match fill to page content; remove default 1px bottom margin (WinUI #7674). -->
+    <StaticResource x:Key="TabViewItemHeaderBackgroundSelected" ResourceKey="LayerFillColorDefaultBrush" />
+    <Thickness x:Key="TabViewSelectedItemHeaderMargin">-1,0,-1,0</Thickness>
 
     <Style x:Key="TabViewCloseButtonStyle" TargetType="Button">
         <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -681,7 +834,7 @@
         </Setter>
     </Style>
 
-    <Style TargetType="TabViewItem" x:Name="myTabViewItem">
+    <Style TargetType="TabViewItem" x:Name="customTabViewItem">
         <Setter Property="Background" Value="{ThemeResource TabViewItemHeaderBackground}" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="UseSystemFocusVisuals" Value="{StaticResource UseSystemFocusVisuals}" />
@@ -737,9 +890,9 @@
                                         <Setter Target="BottomBorderLine.Visibility" Value="Collapsed" />
                                         <Setter Target="RightRadiusRenderArc.Visibility" Value="Visible" />
                                         <Setter Target="LeftRadiusRenderArc.Visibility" Value="Visible" />
-                                        <Setter Target="SelectedBackgroundPath.Visibility" Value="Collapsed" />
-                                        <Setter Target="SelectedBackgroundPath.Fill" Value="{ThemeResource LayerFillColorDefault}" />
-                                        <Setter Target="TabContainer.Background" Value="{ThemeResource LayerFillColorDefault}" />
+                                        <Setter Target="SelectedBackgroundPath.Visibility" Value="Visible" />
+                                        <Setter Target="SelectedBackgroundPath.Fill" Value="{ThemeResource TabViewItemHeaderBackgroundSelected}" />
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackground}" />
                                         <Setter Target="TabContainer.Margin" Value="{ThemeResource TabViewSelectedItemHeaderMargin}" />
                                         <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource TabViewSelectedItemBorderBrush}" />
                                         <Setter Target="TabContainer.BorderThickness" Value="{ThemeResource TabViewSelectedItemBorderThickness}" />
@@ -759,9 +912,9 @@
                                         <Setter Target="BottomBorderLine.Visibility" Value="Collapsed" />
                                         <Setter Target="RightRadiusRenderArc.Visibility" Value="Visible" />
                                         <Setter Target="LeftRadiusRenderArc.Visibility" Value="Visible" />
-                                        <Setter Target="SelectedBackgroundPath.Visibility" Value="Collapsed" />
+                                        <Setter Target="SelectedBackgroundPath.Visibility" Value="Visible" />
                                         <Setter Target="SelectedBackgroundPath.Fill" Value="{ThemeResource TabViewItemHeaderBackgroundSelected}" />
-                                        <Setter Target="TabContainer.Background" Value="{ThemeResource LayerOnMicaBaseAltFillColorTertiary}" />
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackground}" />
                                         <Setter Target="TabContainer.Margin" Value="{ThemeResource TabViewSelectedItemHeaderMargin}" />
                                         <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource TabViewSelectedItemBorderBrush}" />
                                         <Setter Target="TabContainer.BorderThickness" Value="{ThemeResource TabViewSelectedItemBorderThickness}" />
@@ -781,7 +934,7 @@
                                         <Setter Target="BottomBorderLine.Visibility" Value="Collapsed" />
                                         <Setter Target="RightRadiusRenderArc.Visibility" Value="Visible" />
                                         <Setter Target="LeftRadiusRenderArc.Visibility" Value="Visible" />
-                                        <Setter Target="SelectedBackgroundPath.Visibility" Value="Collapsed" />
+                                        <Setter Target="SelectedBackgroundPath.Visibility" Value="Visible" />
                                         <Setter Target="SelectedBackgroundPath.Fill" Value="{ThemeResource TabViewItemHeaderBackgroundSelected}" />
                                         <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackground}" />
                                         <Setter Target="TabContainer.Margin" Value="{ThemeResource TabViewSelectedItemHeaderMargin}" />

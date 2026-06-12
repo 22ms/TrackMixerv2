@@ -13,11 +13,7 @@
         <MicaBackdrop Kind="BaseAlt"/>
     </Window.SystemBackdrop>
 
-    <Grid x:Name="RootGrid">
-        <Grid.KeyboardAccelerators>
-            <KeyboardAccelerator Key="Escape" Invoked="ExitPlayerFullScreenInvoked" />
-        </Grid.KeyboardAccelerators>
-
+    <Grid x:Name="RootGrid" x:FieldModifier="public">
         <TabView x:Name="TabView" Loaded="TabView_Loaded" x:FieldModifier="public" AutomationProperties.AutomationId="MainTabView">
 
         <TabView.Resources>
@@ -35,12 +31,6 @@
             <Grid Background="Transparent" x:Name="CustomDragRegion" MinWidth="188"/>
         </TabView.TabStripFooter>
 
-        <TabView.KeyboardAccelerators>
-            <KeyboardAccelerator Key="T" Modifiers="Control" Invoked="NewTabInvoked" />
-            <KeyboardAccelerator Key="W" Modifiers="Control" Invoked="CloseTabInvoked" />
-            <KeyboardAccelerator Key="PageUp" Modifiers="Control" Invoked="NextTabInvoked" />
-            <KeyboardAccelerator Key="PageDown" Modifiers="Control" Invoked="PreviousTabInvoked" />
-        </TabView.KeyboardAccelerators>
         </TabView>
 
         <Grid x:Name="PlayerFullScreenOverlay"

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.VisualBasic.FileIO;
 using System;
 using System.Collections.Generic;
@@ -28,10 +29,30 @@ namespace TrackMixerv2
         bool initialLoaded = false;
         CancellationTokenSource keyboardPollCts;
         List<RangeBaseValueChangedEventHandler> VolumeSliderChangedHandlers = new List<RangeBaseValueChangedEventHandler>();
+        List<RangeBaseValueChangedEventHandler> FlyoutVolumeSliderChangedHandlers = new List<RangeBaseValueChangedEventHandler>();
         List<Slider> VolumeSliders = new List<Slider>();
+        List<Slider> FlyoutVolumeSliders = new List<Slider>();
+        bool syncingVolumeSliders;
         List<double> CachedSliderValues = new List<double>();
         private bool suppressRatingSave;
         private long ratingValueChangedToken;
+        private KeybindAction? _recordingKeybindAction;
+        private TextBlock? _recordingKeybindShortcutBlock;
+        private Border? _recordingKeybindCell;
+        private bool _mixerToolsInTransport;
+        private TextBlock? _exportButtonLabel;
+        private TextBlock? _deleteButtonLabel;
+        private Thickness _exportButtonPadding;
+        private Thickness _deleteButtonPadding;
+        private HorizontalAlignment _exportHorizontalAlignment;
+        private HorizontalAlignment _deleteHorizontalAlignment;
+        private double _exportMinWidth;
+        private double _deleteMinWidth;
+        private Thickness _playlistControlsMargin;
+        private double _ratingSliderWidth;
+        private double _ratingSliderMinWidth;
+        private double _ratingSliderMaxWidth;
+        private double _ratingControlsMinWidth;
         public string path;
         public MixerPage(string path)
         {
@@ -49,6 +70,20 @@ namespace TrackMixerv2
             PlaylistFilterRating.Click += PlaylistFilterMode_Click;
             PlaylistSubfolderToggle.Click += PlaylistSubfolderToggle_Click;
             LoadMetadata(path);
+            Loaded += MixerPage_Loaded;
+        }
+
+        private void MixerPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            KeybindApplicator.ApplyToMixerPage(this);
+            KeybindRecordingCapture.PreviewKeyDown += KeybindRecordingCapture_PreviewKeyDown;
+            RefreshKeybindList();
+        }
+
+        private void KeybindRecordingCapture_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (TryHandleKeybindRecording(e))
+                e.Handled = true;
         }
         private async void Preferences_Click(object sender, RoutedEventArgs e)
         {
@@ -66,6 +101,139 @@ namespace TrackMixerv2
             MainWindow.Instance?.TogglePlayerFullScreen(MixedMediaPlayer);
         }
 
+        public void SetFullscreenTransportToolsVisible(bool visible)
+        {
+            var control = MixedMediaPlayer?.customMixedMediaPlayerControl;
+            if (control?.FullscreenMixerToolsHost == null)
+                return;
+
+            if (visible && !_mixerToolsInTransport)
+                MoveMixerToolsToTransport(control);
+            else if (!visible && _mixerToolsInTransport)
+                RestoreMixerToolsToBottomPanel();
+        }
+
+        private void MoveMixerToolsToTransport(MixedMediaPlayerControl control)
+        {
+            _exportButtonLabel ??= GetButtonLabel(ExportButton);
+            _deleteButtonLabel ??= GetButtonLabel(DeleteVideoButton);
+
+            ExportDeleteRow.Children.Remove(ExportButton);
+            ExportDeleteRow.Children.Remove(DeleteVideoButton);
+            RatingPlaylistRow.Children.Remove(RatingControlsGrid);
+            RatingPlaylistRow.Children.Remove(PlaylistControlsStack);
+
+            control.FullscreenMixerToolsLeadingHost.Children.Add(ExportButton);
+            control.FullscreenMixerToolsLeadingHost.Children.Add(DeleteVideoButton);
+            control.FullscreenMixerToolsTrailingHost.Children.Add(RatingControlsGrid);
+            control.FullscreenMixerToolsTrailingHost.Children.Add(PlaylistControlsStack);
+
+            control.FullscreenMixerToolsHost.Visibility = Visibility.Visible;
+            ApplyFullscreenCompactStyles();
+            _mixerToolsInTransport = true;
+        }
+
+        private void RestoreMixerToolsToBottomPanel()
+        {
+            var control = MixedMediaPlayer?.customMixedMediaPlayerControl;
+            if (control == null)
+                return;
+
+            control.FullscreenMixerToolsLeadingHost.Children.Remove(ExportButton);
+            control.FullscreenMixerToolsLeadingHost.Children.Remove(DeleteVideoButton);
+            control.FullscreenMixerToolsTrailingHost.Children.Remove(RatingControlsGrid);
+            control.FullscreenMixerToolsTrailingHost.Children.Remove(PlaylistControlsStack);
+
+            ExportDeleteRow.Children.Add(ExportButton);
+            Grid.SetColumn(ExportButton, 0);
+            ExportDeleteRow.Children.Add(DeleteVideoButton);
+            Grid.SetColumn(DeleteVideoButton, 1);
+
+            RatingPlaylistRow.Children.Add(RatingControlsGrid);
+            Grid.SetColumn(RatingControlsGrid, 0);
+            RatingPlaylistRow.Children.Add(PlaylistControlsStack);
+            Grid.SetColumn(PlaylistControlsStack, 1);
+
+            control.FullscreenMixerToolsHost.Visibility = Visibility.Collapsed;
+            RestoreFullscreenCompactStyles();
+            _mixerToolsInTransport = false;
+        }
+
+        private static TextBlock? GetButtonLabel(Button button)
+        {
+            if (button.Content is StackPanel stackPanel
+                && stackPanel.Children.Count > 1
+                && stackPanel.Children[1] is TextBlock label)
+            {
+                return label;
+            }
+
+            return null;
+        }
+
+        private void ApplyFullscreenCompactStyles()
+        {
+            _exportButtonPadding = ExportButton.Padding;
+            _exportHorizontalAlignment = ExportButton.HorizontalAlignment;
+            _exportMinWidth = ExportButton.MinWidth;
+            ExportButton.Padding = new Thickness(8);
+            ExportButton.HorizontalAlignment = HorizontalAlignment.Center;
+            ExportButton.VerticalAlignment = VerticalAlignment.Center;
+            ExportButton.MinWidth = 36;
+            ExportButton.MinHeight = 36;
+            if (_exportButtonLabel != null)
+                _exportButtonLabel.Visibility = Visibility.Collapsed;
+
+            _deleteButtonPadding = DeleteVideoButton.Padding;
+            _deleteHorizontalAlignment = DeleteVideoButton.HorizontalAlignment;
+            _deleteMinWidth = DeleteVideoButton.MinWidth;
+            DeleteVideoButton.Padding = new Thickness(8);
+            DeleteVideoButton.HorizontalAlignment = HorizontalAlignment.Center;
+            DeleteVideoButton.VerticalAlignment = VerticalAlignment.Center;
+            DeleteVideoButton.MinWidth = 36;
+            DeleteVideoButton.MinHeight = 36;
+            if (_deleteButtonLabel != null)
+                _deleteButtonLabel.Visibility = Visibility.Collapsed;
+
+            _ratingSliderWidth = RatingSlider.Width;
+            _ratingSliderMinWidth = RatingSlider.MinWidth;
+            _ratingSliderMaxWidth = RatingSlider.MaxWidth;
+            _ratingControlsMinWidth = RatingControlsGrid.MinWidth;
+            RatingSlider.Width = 112;
+            RatingSlider.MinWidth = 96;
+            RatingSlider.MaxWidth = 128;
+            RatingControlsGrid.MinWidth = 140;
+
+            _playlistControlsMargin = PlaylistControlsStack.Margin;
+            PlaylistControlsStack.Margin = new Thickness(0);
+        }
+
+        private void RestoreFullscreenCompactStyles()
+        {
+            ExportButton.Padding = _exportButtonPadding;
+            ExportButton.HorizontalAlignment = _exportHorizontalAlignment;
+            ExportButton.MinWidth = _exportMinWidth;
+            ExportButton.MinHeight = 0;
+            ExportButton.VerticalAlignment = VerticalAlignment.Stretch;
+            if (_exportButtonLabel != null)
+                _exportButtonLabel.Visibility = Visibility.Visible;
+
+            DeleteVideoButton.Padding = _deleteButtonPadding;
+            DeleteVideoButton.HorizontalAlignment = _deleteHorizontalAlignment;
+            DeleteVideoButton.MinWidth = _deleteMinWidth;
+            DeleteVideoButton.MinHeight = 0;
+            DeleteVideoButton.VerticalAlignment = VerticalAlignment.Stretch;
+            if (_deleteButtonLabel != null)
+                _deleteButtonLabel.Visibility = Visibility.Visible;
+
+            RatingSlider.Width = _ratingSliderWidth;
+            RatingSlider.MinWidth = _ratingSliderMinWidth;
+            RatingSlider.MaxWidth = _ratingSliderMaxWidth;
+            RatingControlsGrid.MinWidth = _ratingControlsMinWidth;
+
+            PlaylistControlsStack.Margin = _playlistControlsMargin;
+        }
+
         private async void OpenLink_Click(object sender, RoutedEventArgs e)
         {
             if (sender is MenuFlyoutItem item && item.Tag is string url && Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -81,8 +249,8 @@ namespace TrackMixerv2
 
         private static async Task PlaybackKeyboardCheck(MixedMediaPlayer mixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue, CancellationToken cancellationToken)
         {
-            bool previousShiftKeyDown = IsKeyDown(VirtualKey.LeftShift);
-            bool previousControlKeyDown = IsKeyDown(VirtualKey.LeftControl);
+            bool previousBoostKeyDown = false;
+            bool previousSlowKeyDown = false;
 
             try
             {
@@ -94,47 +262,26 @@ namespace TrackMixerv2
                     continue;
                 }
 
-                bool shiftKeyDown = IsKeyDown(VirtualKey.LeftShift);
-                bool controlKeyDown = IsKeyDown(VirtualKey.LeftControl);
+                VirtualKey boostKey = (VirtualKey)KeybindStore.Get(KeybindAction.SpeedBoost).Key;
+                VirtualKey slowKey = (VirtualKey)KeybindStore.Get(KeybindAction.SpeedSlow).Key;
+                bool boostKeyDown = IsKeyDown(boostKey);
+                bool slowKeyDown = IsKeyDown(slowKey);
 
-                if (shiftKeyDown != previousShiftKeyDown)
+                if (boostKeyDown != previousBoostKeyDown || slowKeyDown != previousSlowKeyDown)
                 {
                     dispatcherQueue.TryEnqueue(() =>
                     {
-                        if (IsKeyDown(VirtualKey.LeftShift))
-                        {
+                        if (IsKeyDown(boostKey))
                             mixedMediaPlayer.ChangePlaybackSpeed(2.0);
-                        }
-                        else if (IsKeyDown(VirtualKey.LeftControl))
-                        {
+                        else if (IsKeyDown(slowKey))
                             mixedMediaPlayer.ChangePlaybackSpeed(0.25);
-                        }
                         else
-                        {
                             mixedMediaPlayer.ChangePlaybackSpeed(1.0);
-                        }
                     });
-                    previousShiftKeyDown = shiftKeyDown;
+                    previousBoostKeyDown = boostKeyDown;
+                    previousSlowKeyDown = slowKeyDown;
                 }
-                if (controlKeyDown != previousControlKeyDown)
-                {
-                    dispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (IsKeyDown(VirtualKey.LeftControl))
-                        {
-                            mixedMediaPlayer.ChangePlaybackSpeed(0.25);
-                        }
-                        else if (IsKeyDown(VirtualKey.LeftShift))
-                        {
-                            mixedMediaPlayer.ChangePlaybackSpeed(2.0);
-                        }
-                        else
-                        {
-                            mixedMediaPlayer.ChangePlaybackSpeed(1.0);
-                        }
-                    });
-                    previousControlKeyDown = controlKeyDown;
-                }
+
                 await Task.Delay(10, cancellationToken);
             }
             }
@@ -195,20 +342,21 @@ namespace TrackMixerv2
 
         private void PlaylistFilterMode_Click(object sender, RoutedEventArgs e)
         {
-            var item = sender as MenuFlyoutItem;
-            if (item == null) return;
-            switch (item.Tag)
+            if (sender is not RadioMenuFlyoutItem item || item.Tag is not string tag)
+                return;
+
+            switch (tag)
             {
                 case "chrono":
                     PlaylistFilterTimeValue.Visibility = Visibility.Collapsed;
                     PlaylistFilterTimeUnit.Visibility = Visibility.Collapsed;
-                    PlaylistFilterSelectionIcon.Glyph = (PlaylistFilterChrono.Icon as FontIcon).Glyph;
+                    PlaylistFilterSelectionIcon.Glyph = "\uE81C";
                     MixedMediaPlayer.PlaylistConfig.PlaylistMode = PlaylistMode.Chrono;
                     break;
                 case "rating":
                     PlaylistFilterTimeValue.Visibility = Visibility.Visible;
                     PlaylistFilterTimeUnit.Visibility = Visibility.Visible;
-                    PlaylistFilterSelectionIcon.Glyph = (PlaylistFilterRating.Icon as FontIcon).Glyph;
+                    PlaylistFilterSelectionIcon.Glyph = "\uE728";
 
                     MixedMediaPlayer.PlaylistConfig.PlaylistMode = PlaylistMode.Rating;
                     MixedMediaPlayer.PlaylistConfig.TimeSpan = TimeSpanFromUnitValue((TimeUnit)PlaylistFilterTimeUnit.SelectedIndex, PlaylistFilterTimeValue.Value);
@@ -281,69 +429,144 @@ namespace TrackMixerv2
                 // HACK END xd
                 VideoTitle.Text = Helper.GetTitleFromPath(args.path);
                 tabViewItem.Header = VideoTitle.Text;
-                VolumeControlGrid.Children.Clear();
-                VolumeControlGrid.ColumnDefinitions.Clear();
-                for (int i = 0; i < VolumeSliders.Count && i < VolumeSliderChangedHandlers.Count; i++)
-                {
-                    VolumeSliders[i].ValueChanged -= VolumeSliderChangedHandlers[i];
-                }
-                VolumeSliders.Clear();
-                VolumeSliderChangedHandlers.Clear();
+                ClearVolumeControls();
                 LoadMetadata(args.path);
-                for (int i = 0; i < args.TrackPlayers.Count; i++)
+                int trackCount = args.TrackPlayers.Count;
+                var flyoutContent = MixedMediaPlayer.customMixedMediaPlayerControl?.TrackVolumeFlyoutContent;
+                for (int i = 0; i < trackCount; i++)
+                    VolumeControlGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+                for (int i = 0; i < trackCount; i++)
                 {
                     int trackIndex = i;
-                    Slider volumeSlider = new Slider();
-                    AutomationProperties.SetAutomationId(volumeSlider, $"VolumeSlider_{trackIndex}");
-                    volumeSlider.IsTabStop = false;
-                    volumeSlider.Height = 100;
-                    volumeSlider.TickFrequency = 5;
-                    volumeSlider.TickPlacement = TickPlacement.Outside;
-                    volumeSlider.Orientation = Orientation.Vertical;
-                    volumeSlider.HorizontalAlignment = HorizontalAlignment.Center;
-                    volumeSlider.Maximum = 100;
-                    volumeSlider.Minimum = 0;
-                    volumeSlider.Value = GetSavedSliderValue(trackIndex);
+                    string trackNameText = GetTrackName(args.TrackPlayers[i], trackIndex);
+                    double savedValue = GetSavedSliderValue(trackIndex);
 
-                    MixedMediaPlayer.SetVolume(trackIndex, volumeSlider.Value);
-                    var volumeSliderChangedHandler = new RangeBaseValueChangedEventHandler(async (e, a) =>
+                    Slider panelSlider = CreateVolumeSlider(trackIndex, new Thickness(0, 6, 0, 6), $"VolumeSlider_{trackIndex}");
+                    panelSlider.Value = savedValue;
+                    MixedMediaPlayer.SetVolume(trackIndex, savedValue);
+
+                    var panelSliderChangedHandler = new RangeBaseValueChangedEventHandler(async (e, a) =>
                     {
+                        if (syncingVolumeSliders)
+                            return;
+
                         CachedSliderValues[trackIndex] = a.NewValue;
                         MixedMediaPlayer.SetVolume(trackIndex, a.NewValue);
+                        SyncVolumeSlider(FlyoutVolumeSliders[trackIndex], a.NewValue);
                         await SaveMetadata();
                     });
-                    volumeSlider.ValueChanged += volumeSliderChangedHandler;
-                    VolumeSliderChangedHandlers.Add(volumeSliderChangedHandler);
-                    VolumeSliders.Add(volumeSlider);
+                    panelSlider.ValueChanged += panelSliderChangedHandler;
+                    VolumeSliderChangedHandlers.Add(panelSliderChangedHandler);
+                    VolumeSliders.Add(panelSlider);
 
-                    TextBlock trackName = new TextBlock();
-                    try
+                    var panelRow = CreateVolumeRow(trackNameText, panelSlider, labelMinWidth: 72);
+                    Grid.SetRow(panelRow, i);
+                    VolumeControlGrid.Children.Add(panelRow);
+
+                    if (flyoutContent != null)
                     {
-                        trackName.Text = (args.TrackPlayers[i].Source as MediaPlaybackItem).AudioTracks[i].Name;
-                        if (trackName.Text == "")
-                            trackName.Text = "Volume";
-                    }
-                    catch (Exception)
-                    {
-                        trackName.Text = i.ToString();
-                    }
-                    trackName.HorizontalAlignment = HorizontalAlignment.Center;
-                    trackName.TextAlignment = TextAlignment.Center;
+                        Slider flyoutSlider = CreateVolumeSlider(trackIndex, new Thickness(0), $"VolumeFlyoutSlider_{trackIndex}");
+                        flyoutSlider.Value = savedValue;
+                        var flyoutSliderChangedHandler = new RangeBaseValueChangedEventHandler(async (e, a) =>
+                        {
+                            if (syncingVolumeSliders)
+                                return;
 
-                    ColumnDefinition column = new ColumnDefinition();
-                    column.Width = new GridLength(1, GridUnitType.Auto);
-                    VolumeControlGrid.ColumnDefinitions.Add(column);
-
-                    StackPanel stackPanel = new StackPanel();
-                    Style stackPanelStyle = (Style)Application.Current.Resources["VolumeControlStackPanelStyle"];
-                    stackPanel.Style = stackPanelStyle;
-                    stackPanel.Children.Add(volumeSlider);
-                    stackPanel.Children.Add(trackName);
-                    Grid.SetColumn(stackPanel, i);
-                    VolumeControlGrid.Children.Add(stackPanel);
+                            CachedSliderValues[trackIndex] = a.NewValue;
+                            MixedMediaPlayer.SetVolume(trackIndex, a.NewValue);
+                            SyncVolumeSlider(panelSlider, a.NewValue);
+                            await SaveMetadata();
+                        });
+                        flyoutSlider.ValueChanged += flyoutSliderChangedHandler;
+                        FlyoutVolumeSliderChangedHandlers.Add(flyoutSliderChangedHandler);
+                        FlyoutVolumeSliders.Add(flyoutSlider);
+                        flyoutContent.Children.Add(CreateVolumeRow(trackNameText, flyoutSlider, labelMinWidth: 96));
+                    }
                 }
             });
         }
+        private void ClearVolumeControls()
+        {
+            VolumeControlGrid.Children.Clear();
+            VolumeControlGrid.RowDefinitions.Clear();
+            for (int i = 0; i < VolumeSliders.Count && i < VolumeSliderChangedHandlers.Count; i++)
+                VolumeSliders[i].ValueChanged -= VolumeSliderChangedHandlers[i];
+            for (int i = 0; i < FlyoutVolumeSliders.Count && i < FlyoutVolumeSliderChangedHandlers.Count; i++)
+                FlyoutVolumeSliders[i].ValueChanged -= FlyoutVolumeSliderChangedHandlers[i];
+
+            VolumeSliders.Clear();
+            VolumeSliderChangedHandlers.Clear();
+            FlyoutVolumeSliders.Clear();
+            FlyoutVolumeSliderChangedHandlers.Clear();
+            MixedMediaPlayer.customMixedMediaPlayerControl?.TrackVolumeFlyoutContent?.Children.Clear();
+        }
+
+        private static string GetTrackName(MediaPlayer trackPlayer, int trackIndex)
+        {
+            try
+            {
+                string name = (trackPlayer.Source as MediaPlaybackItem).AudioTracks[trackIndex].Name;
+                return string.IsNullOrEmpty(name) ? "Track" : name;
+            }
+            catch (Exception)
+            {
+                return $"Track {trackIndex + 1}";
+            }
+        }
+
+        private static Slider CreateVolumeSlider(int trackIndex, Thickness margin, string automationId)
+        {
+            var volumeSlider = new Slider
+            {
+                IsTabStop = false,
+                Margin = margin,
+                TickFrequency = 5,
+                TickPlacement = TickPlacement.None,
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Maximum = 100,
+                Minimum = 0,
+            };
+            AutomationProperties.SetAutomationId(volumeSlider, automationId);
+            return volumeSlider;
+        }
+
+        private static Grid CreateVolumeRow(string trackNameText, Slider volumeSlider, double labelMinWidth)
+        {
+            var trackName = new TextBlock
+            {
+                Text = trackNameText,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+
+            var row = new Grid
+            {
+                ColumnSpacing = 8,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+            };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = labelMinWidth });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(trackName, 0);
+            Grid.SetColumn(volumeSlider, 1);
+            row.Children.Add(trackName);
+            row.Children.Add(volumeSlider);
+            return row;
+        }
+
+        private void SyncVolumeSlider(Slider targetSlider, double value)
+        {
+            if (targetSlider == null)
+                return;
+
+            syncingVolumeSliders = true;
+            targetSlider.Value = value;
+            syncingVolumeSliders = false;
+        }
+
         public double[] GetVolumeLevels()
         {
             return VolumeSliders.Select(slider => slider.Value).ToArray();
@@ -355,6 +578,9 @@ namespace TrackMixerv2
 
         public void Dispose()
         {
+            if (_mixerToolsInTransport)
+                RestoreMixerToolsToBottomPanel();
+
             keyboardPollCts?.Cancel();
             keyboardPollCts?.Dispose();
             keyboardPollCts = null;
@@ -365,15 +591,19 @@ namespace TrackMixerv2
             PlaylistFilterTimeUnit.SelectionChanged -= PlaylistFilterTimeUnit_SelectionChanged;
             PlaylistFilterChrono.Click -= PlaylistFilterMode_Click;
             PlaylistFilterRating.Click -= PlaylistFilterMode_Click;
+            KeybindRecordingCapture.PreviewKeyDown -= KeybindRecordingCapture_PreviewKeyDown;
+            CancelKeybindRecording();
+            Loaded -= MixerPage_Loaded;
             MixedMediaPlayer.Loaded -= MixedMediaPlayer_Loaded;
             MixedMediaPlayer.FullScreenToggleRequested -= MixedMediaPlayer_FullScreenToggleRequested;
             MixedMediaPlayer.MediaLoaded -= MixedMediaPlayer_MediaLoaded;
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged -= MediaPlayer_CurrentStateChanged;
             for (int i = 0; i < VolumeSliders.Count && i < VolumeSliderChangedHandlers.Count; i++)
-            {
                 VolumeSliders[i].ValueChanged -= VolumeSliderChangedHandlers[i];
-            }
+            for (int i = 0; i < FlyoutVolumeSliders.Count && i < FlyoutVolumeSliderChangedHandlers.Count; i++)
+                FlyoutVolumeSliders[i].ValueChanged -= FlyoutVolumeSliderChangedHandlers[i];
             VolumeSliderChangedHandlers.Clear();
+            FlyoutVolumeSliderChangedHandlers.Clear();
             MixedMediaPlayer.Dispose();
             MixedMediaPlayer = null;
         }
@@ -440,26 +670,208 @@ namespace TrackMixerv2
                 return 100;
             }
         }
-        private void Space_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        internal void PlayPauseFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
-            if (MixedMediaPlayer.MainMediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
-            {
+            if (MixedMediaPlayer.MainMediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
                 MixedMediaPlayer.PauseAll();
-            }
             else
-            {
                 MixedMediaPlayer.PlayAll();
-            }
+            args?.Handled = true;
         }
 
-        private void Right_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        internal void FastForwardFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
             MixedMediaPlayer.FastForward(5000);
+            args?.Handled = true;
         }
 
-        private void Left_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        internal void RewindFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
             MixedMediaPlayer.Rewind(5000);
+            args?.Handled = true;
+        }
+
+        private async void ExportButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (MainWindow.Instance != null)
+                await MainWindow.Instance.ExportActiveTabAsync();
+        }
+
+        internal bool TryHandleKeybindRecording(KeyRoutedEventArgs args)
+        {
+            if (_recordingKeybindAction == null)
+                return false;
+
+            args.Handled = true;
+
+            if (args.Key == VirtualKey.Escape)
+            {
+                CancelKeybindRecording();
+                return true;
+            }
+
+            if (KeybindChordCapture.IsModifierKey(args.Key))
+                return true;
+
+            KeybindAction action = _recordingKeybindAction.Value;
+            KeybindChord chord = KeybindChordCapture.CreateChord(args.Key);
+            KeybindStore.Set(action, chord);
+            if (_recordingKeybindShortcutBlock != null)
+                _recordingKeybindShortcutBlock.Text = KeybindFormatter.Format(chord);
+            ClearKeybindRecordingState();
+            return true;
+        }
+
+        private void RefreshKeybindList()
+        {
+            const int columns = 5;
+            var items = KeybindStore.DisplayOrder;
+            int rows = (items.Count + columns - 1) / columns;
+
+            ClearKeybindRecordingState();
+            KeybindListGrid.Children.Clear();
+            KeybindListGrid.RowDefinitions.Clear();
+            KeybindListGrid.ColumnDefinitions.Clear();
+
+            for (int r = 0; r < rows; r++)
+                KeybindListGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            for (int c = 0; c < columns; c++)
+                KeybindListGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var dividerBrush = Application.Current.Resources["DividerStrokeColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            var badgeBrush = Application.Current.Resources["ControlFillColorSecondaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            for (int i = 0; i < items.Count; i++)
+            {
+                (KeybindAction action, string label) = items[i];
+                int row = i / columns;
+                int column = i % columns;
+
+                var labelBlock = new TextBlock
+                {
+                    Text = label,
+                    FontSize = 11,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextWrapping = TextWrapping.NoWrap,
+                };
+
+                var shortcutBlock = new TextBlock
+                {
+                    Text = KeybindFormatter.Format(KeybindStore.Get(action)),
+                    FontSize = 11,
+                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+
+                var shortcutBadge = new Border
+                {
+                    Background = badgeBrush,
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 2, 6, 2),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Child = shortcutBlock,
+                };
+
+                var cellContent = new StackPanel
+                {
+                    Spacing = 4,
+                    Orientation = Orientation.Vertical,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    IsHitTestVisible = false,
+                };
+                cellContent.Children.Add(labelBlock);
+                cellContent.Children.Add(shortcutBadge);
+
+                bool isLastRow = row == rows - 1;
+                var cell = new Border
+                {
+                    Padding = new Thickness(10, 8, 10, 8),
+                    BorderBrush = dividerBrush,
+                    BorderThickness = new Thickness(column == 0 ? 0 : 1, row == 0 ? 0 : 1, 1, isLastRow ? 0 : 1),
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    Tag = action,
+                    Child = cellContent,
+                };
+                AutomationProperties.SetAutomationId(cell, $"KeybindCell_{action}");
+                ToolTipService.SetToolTip(cell, "Click to change shortcut");
+                cell.PointerPressed += KeybindCell_PointerPressed;
+                cell.PointerEntered += KeybindCell_PointerEntered;
+                cell.PointerExited += KeybindCell_PointerExited;
+
+                Grid.SetRow(cell, row);
+                Grid.SetColumn(cell, column);
+                KeybindListGrid.Children.Add(cell);
+            }
+        }
+
+        private void KeybindCell_PointerEntered(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is not Border cell || ReferenceEquals(cell, _recordingKeybindCell))
+                return;
+
+            cell.Background = Application.Current.Resources["ControlFillColorSecondaryBrush"] as Brush;
+        }
+
+        private void KeybindCell_PointerExited(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is not Border cell || ReferenceEquals(cell, _recordingKeybindCell))
+                return;
+
+            cell.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        }
+
+        private void KeybindCell_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is not Border clickedCell || clickedCell.Tag is not KeybindAction action)
+                return;
+
+            e.Handled = true;
+
+            if (ReferenceEquals(clickedCell, _recordingKeybindCell))
+            {
+                CancelKeybindRecording();
+                return;
+            }
+
+            CancelKeybindRecording();
+            _recordingKeybindAction = action;
+            _recordingKeybindCell = clickedCell;
+            _recordingKeybindShortcutBlock = GetKeybindShortcutBlock(clickedCell);
+            if (_recordingKeybindShortcutBlock != null)
+                _recordingKeybindShortcutBlock.Text = "Press keys…";
+            clickedCell.Background = Application.Current.Resources["AccentFillColorDefaultBrush"] as Brush;
+            KeybindRecordingCapture.IsHitTestVisible = true;
+            KeybindRecordingCapture.Focus(FocusState.Programmatic);
+        }
+
+        private static TextBlock? GetKeybindShortcutBlock(Border cell)
+        {
+            if (cell.Child is not StackPanel stack || stack.Children.Count < 2)
+                return null;
+            if (stack.Children[1] is Border badge && badge.Child is TextBlock text)
+                return text;
+            return null;
+        }
+
+        private void CancelKeybindRecording()
+        {
+            if (_recordingKeybindAction == null)
+                return;
+
+            if (_recordingKeybindShortcutBlock != null)
+                _recordingKeybindShortcutBlock.Text = KeybindFormatter.Format(KeybindStore.Get(_recordingKeybindAction.Value));
+            ClearKeybindRecordingState();
+        }
+
+        private void ClearKeybindRecordingState()
+        {
+            if (_recordingKeybindCell != null)
+                _recordingKeybindCell.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            KeybindRecordingCapture.IsHitTestVisible = false;
+            KeybindRecordingCapture.Text = string.Empty;
+            _recordingKeybindAction = null;
+            _recordingKeybindShortcutBlock = null;
+            _recordingKeybindCell = null;
         }
         static bool IsKeyDown(VirtualKey key)
         {

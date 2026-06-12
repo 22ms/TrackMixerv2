@@ -62,6 +62,9 @@ namespace TrackMixerv2
             {
                 trackPlayer.PlaybackRate = sender.PlaybackRate;
             }
+
+            dispatcherQueue.TryEnqueue(() =>
+                customMixedMediaPlayerControl?.SetPlaybackRateSelection(sender.PlaybackRate));
         }
 
         private void MixedMediaPlayer_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -118,32 +121,30 @@ namespace TrackMixerv2
             }
         }
 
-        private void MyMixedMediaPlayerControl_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        private void CustomMixedMediaPlayerControl_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         {
             RegisterControlEvents();
         }
 
         private void AutoplayOption_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         {
-            var item = sender as MenuFlyoutItem;
-            if (item != null)
+            if (sender is not RadioMenuFlyoutItem item || item.Tag is not string option)
+                return;
+
+            switch (option)
             {
-                string option = item.Tag.ToString();
-                switch (option)
-                {
-                    case "forward":
-                        myMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = (myMixedMediaPlayerControl.AutoplayForwardOption.Icon as FontIcon).Glyph;
-                        AutoplayMode = AutoplayMode.Forward;
-                        break;
-                    case "backward":
-                        myMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = (myMixedMediaPlayerControl.AutoplayBackwardOption.Icon as FontIcon).Glyph;
-                        AutoplayMode = AutoplayMode.Backward;
-                        break;
-                    case "off":
-                        myMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = (myMixedMediaPlayerControl.AutoplayOffOption.Icon as FontIcon).Glyph;
-                        AutoplayMode = AutoplayMode.Off;
-                        break;
-                }
+                case "forward":
+                    customMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = "\uEA47";
+                    AutoplayMode = AutoplayMode.Forward;
+                    break;
+                case "backward":
+                    customMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = "\uE830";
+                    AutoplayMode = AutoplayMode.Backward;
+                    break;
+                case "off":
+                    customMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = "\uE8BB";
+                    AutoplayMode = AutoplayMode.Off;
+                    break;
             }
         }
 
@@ -167,6 +168,8 @@ namespace TrackMixerv2
             {
                 trackPlayer.PlaybackRate = rate;
             }
+
+            customMixedMediaPlayerControl?.SetPlaybackRateSelection(rate);
         }
 
         private async Task showUnsupportedCodecDialog()
@@ -396,10 +399,12 @@ namespace TrackMixerv2
 
         public void SetFullScreenButtonState(bool isFullScreen)
         {
-            if (myMixedMediaPlayerControl?.FullScreenSymbol != null)
-                myMixedMediaPlayerControl.FullScreenSymbol.Glyph = isFullScreen ? "\uE7F4" : "\uE740";
-            if (myMixedMediaPlayerControl?.FullScreenButton != null)
-                ToolTipService.SetToolTip(myMixedMediaPlayerControl.FullScreenButton, isFullScreen ? "Exit fullscreen" : "Fullscreen");
+            if (customMixedMediaPlayerControl?.FullScreenSymbol != null)
+                customMixedMediaPlayerControl.FullScreenSymbol.Glyph = isFullScreen
+                    ? ((char)Symbol.BackToWindow).ToString()
+                    : ((char)Symbol.FullScreen).ToString();
+            if (customMixedMediaPlayerControl?.FullScreenButton != null)
+                ToolTipService.SetToolTip(customMixedMediaPlayerControl.FullScreenButton, isFullScreen ? "Exit fullscreen" : "Fullscreen");
         }
 
         private void FullScreenButton_Click(object sender, RoutedEventArgs e)
@@ -409,54 +414,86 @@ namespace TrackMixerv2
 
         public void RegisterControlEvents()
         {
-            if (myMixedMediaPlayerControl != null)
+            if (customMixedMediaPlayerControl != null)
             {
-                if (myMixedMediaPlayerControl.ProgressSlider != null)
+                if (customMixedMediaPlayerControl.ProgressSlider != null)
                 {
-                    myMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
-                    myMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
-                    myMixedMediaPlayerControl.ProgressSlider.PointerPressed += ProgressSlider_PointerPressed;
-                    myMixedMediaPlayerControl.ProgressSlider.PointerReleased += ProgressSlider_PointerReleased;
+                    customMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
+                    customMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
+                    customMixedMediaPlayerControl.ProgressSlider.PointerPressed += ProgressSlider_PointerPressed;
+                    customMixedMediaPlayerControl.ProgressSlider.PointerReleased += ProgressSlider_PointerReleased;
                 }
 
-                if (myMixedMediaPlayerControl.NextTrackButton != null)
+                if (customMixedMediaPlayerControl.NextTrackButton != null)
                 {
-                    myMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
-                    myMixedMediaPlayerControl.NextTrackButton.Click += NextTrackButton_Click;
+                    customMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
+                    customMixedMediaPlayerControl.NextTrackButton.Click += NextTrackButton_Click;
                 }
-                if (myMixedMediaPlayerControl.PreviousTrackButton != null)
+                if (customMixedMediaPlayerControl.PreviousTrackButton != null)
                 {
-                    myMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
-                    myMixedMediaPlayerControl.PreviousTrackButton.Click += PreviousTrackButton_Click;
+                    customMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
+                    customMixedMediaPlayerControl.PreviousTrackButton.Click += PreviousTrackButton_Click;
                 }
-                if (myMixedMediaPlayerControl.AutoplayForwardOption != null)
+                if (customMixedMediaPlayerControl.AutoplayForwardOption != null)
                 {
-                    myMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
-                    myMixedMediaPlayerControl.AutoplayForwardOption.Click += AutoplayOption_Click;
+                    customMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
+                    customMixedMediaPlayerControl.AutoplayForwardOption.Click += AutoplayOption_Click;
                 }
-                if (myMixedMediaPlayerControl.AutoplayBackwardOption != null)
+                if (customMixedMediaPlayerControl.AutoplayBackwardOption != null)
                 {
-                    myMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
-                    myMixedMediaPlayerControl.AutoplayBackwardOption.Click += AutoplayOption_Click;
+                    customMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
+                    customMixedMediaPlayerControl.AutoplayBackwardOption.Click += AutoplayOption_Click;
                 }
-                if (myMixedMediaPlayerControl.AutoplayOffOption != null)
+                if (customMixedMediaPlayerControl.AutoplayOffOption != null)
                 {
-                    myMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
-                    myMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
+                    customMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
+                    customMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
                 }
-                if (myMixedMediaPlayerControl.FullScreenButton != null)
+                if (customMixedMediaPlayerControl.FullScreenButton != null)
                 {
-                    myMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
-                    myMixedMediaPlayerControl.FullScreenButton.Click += FullScreenButton_Click;
+                    customMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
+                    customMixedMediaPlayerControl.FullScreenButton.Click += FullScreenButton_Click;
                 }
-                myMixedMediaPlayerControl.Loaded -= MyMixedMediaPlayerControl_Loaded;
-                myMixedMediaPlayerControl.Loaded += MyMixedMediaPlayerControl_Loaded;
+
+                customMixedMediaPlayerControl.EnsureCustomPlaybackRateFlyout();
+                foreach (var playbackRateOption in customMixedMediaPlayerControl.PlaybackRateOptions)
+                {
+                    playbackRateOption.Click -= PlaybackRateOption_Click;
+                    playbackRateOption.Click += PlaybackRateOption_Click;
+                }
+
+                UpdateAutoplayFlyoutSelection();
+                if (MainMediaPlayer?.MediaPlayer != null)
+                    customMixedMediaPlayerControl.SetPlaybackRateSelection(MainMediaPlayer.MediaPlayer.PlaybackRate);
+
+                customMixedMediaPlayerControl.Loaded -= CustomMixedMediaPlayerControl_Loaded;
+                customMixedMediaPlayerControl.Loaded += CustomMixedMediaPlayerControl_Loaded;
             }
         }
 
-        private void PlaybackRateButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        private void PlaybackRateOption_Click(object sender, RoutedEventArgs e)
         {
-            Trace.WriteLine(MainMediaPlayer.MediaPlayer.PlaybackRate);
+            if (sender is RadioMenuFlyoutItem item && item.Tag is double rate)
+                ChangePlaybackSpeed(rate);
+        }
+
+        private void UpdateAutoplayFlyoutSelection()
+        {
+            if (customMixedMediaPlayerControl == null)
+                return;
+
+            switch (AutoplayMode)
+            {
+                case AutoplayMode.Forward:
+                    customMixedMediaPlayerControl.AutoplayForwardOption.IsChecked = true;
+                    break;
+                case AutoplayMode.Backward:
+                    customMixedMediaPlayerControl.AutoplayBackwardOption.IsChecked = true;
+                    break;
+                default:
+                    customMixedMediaPlayerControl.AutoplayOffOption.IsChecked = true;
+                    break;
+            }
         }
 
         private void ProgressSlider_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -471,26 +508,28 @@ namespace TrackMixerv2
 
         public void DeRegisterControlEvents()
         {
-            if (myMixedMediaPlayerControl != null)
+            if (customMixedMediaPlayerControl != null)
             {
-                if (myMixedMediaPlayerControl.NextTrackButton != null)
-                    myMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
-                if (myMixedMediaPlayerControl.PreviousTrackButton != null)
-                    myMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
-                if (myMixedMediaPlayerControl.AutoplayForwardOption != null)
-                    myMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
-                if (myMixedMediaPlayerControl.AutoplayBackwardOption != null)
-                    myMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
-                if (myMixedMediaPlayerControl.AutoplayOffOption != null)
-                    myMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
-                if (myMixedMediaPlayerControl.ProgressSlider != null)
+                if (customMixedMediaPlayerControl.NextTrackButton != null)
+                    customMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
+                if (customMixedMediaPlayerControl.PreviousTrackButton != null)
+                    customMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
+                if (customMixedMediaPlayerControl.AutoplayForwardOption != null)
+                    customMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
+                if (customMixedMediaPlayerControl.AutoplayBackwardOption != null)
+                    customMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
+                if (customMixedMediaPlayerControl.AutoplayOffOption != null)
+                    customMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
+                if (customMixedMediaPlayerControl.ProgressSlider != null)
                 {
-                    myMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
-                    myMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
+                    customMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
+                    customMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
                 }
-                if (myMixedMediaPlayerControl.FullScreenButton != null)
-                    myMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
-                myMixedMediaPlayerControl.Loaded -= MyMixedMediaPlayerControl_Loaded;
+                if (customMixedMediaPlayerControl.FullScreenButton != null)
+                    customMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
+                foreach (var playbackRateOption in customMixedMediaPlayerControl.PlaybackRateOptions)
+                    playbackRateOption.Click -= PlaybackRateOption_Click;
+                customMixedMediaPlayerControl.Loaded -= CustomMixedMediaPlayerControl_Loaded;
             }
         }
 
