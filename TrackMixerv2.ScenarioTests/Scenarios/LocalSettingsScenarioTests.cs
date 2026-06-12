@@ -31,6 +31,17 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     }
 
     [Fact]
+    public void Skip_seconds_round_trip_through_disk()
+    {
+        LocalSettingsStore.SetSkipSeconds(15);
+        LocalSettingsStore.ResetCache();
+
+        Assert.Equal(15, LocalSettingsStore.GetSkipSeconds());
+        Assert.Equal("Rewind 15s", KeybindStore.GetActionLabel(KeybindAction.Rewind));
+        Assert.Equal("Forward 15s", KeybindStore.GetActionLabel(KeybindAction.FastForward));
+    }
+
+    [Fact]
     public void FilterExistingPaths_removes_missing_files()
     {
         string existing = Path.Combine(Path.GetTempPath(), "TrackMixer-existing-" + Guid.NewGuid().ToString("N") + ".mp4");
