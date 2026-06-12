@@ -61,8 +61,8 @@ public static class KeybindStore
   public static IReadOnlyList<(KeybindAction Action, string Label)> DisplayOrder { get; } =
   [
       (KeybindAction.PlayPause, "Play / pause"),
-      (KeybindAction.Rewind, "Rewind 5s"),
-      (KeybindAction.FastForward, "Forward 5s"),
+      (KeybindAction.Rewind, "Rewind"),
+      (KeybindAction.FastForward, "Forward"),
       (KeybindAction.SpeedBoost, "Speed boost (hold)"),
       (KeybindAction.SpeedSlow, "Slow motion (hold)"),
       (KeybindAction.NewTab, "New tab"),
@@ -77,6 +77,24 @@ public static class KeybindStore
     EnsureLoaded();
     lock (Lock)
       return cache![action];
+  }
+
+  public static string GetActionLabel(KeybindAction action)
+  {
+    foreach (var (itemAction, label) in DisplayOrder)
+    {
+      if (itemAction != action)
+        continue;
+
+      return action switch
+      {
+        KeybindAction.Rewind => $"Rewind {LocalSettingsStore.GetSkipSeconds()}s",
+        KeybindAction.FastForward => $"Forward {LocalSettingsStore.GetSkipSeconds()}s",
+        _ => label,
+      };
+    }
+
+    return action.ToString();
   }
 
   public static void Set(KeybindAction action, KeybindChord chord)

@@ -88,12 +88,16 @@ namespace TrackMixerv2
         }
         private async void Preferences_Click(object sender, RoutedEventArgs e)
         {
+            SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
+
             var result = await PreferencesDialog.ShowAsync();
 
             if (result == ContentDialogResult.Primary)
             {
                 LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
                 LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
+                LocalSettingsStore.SetSkipSeconds((int)Math.Round(SkipSecondsNumberBox.Value));
+                RefreshKeybindList();
             }
         }
 
@@ -402,6 +406,8 @@ namespace TrackMixerv2
                 else
                     DoubleClickCheckBox.IsChecked = true;
 
+                SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
+
                 initialLoaded = true;
             });
         }
@@ -683,15 +689,18 @@ namespace TrackMixerv2
 
         internal void FastForwardFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
-            MixedMediaPlayer.FastForward(5000);
+            MixedMediaPlayer.FastForward(GetSkipOffsetMillis());
             args?.Handled = true;
         }
 
         internal void RewindFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
-            MixedMediaPlayer.Rewind(5000);
+            MixedMediaPlayer.Rewind(GetSkipOffsetMillis());
             args?.Handled = true;
         }
+
+        private static int GetSkipOffsetMillis() =>
+            LocalSettingsStore.GetSkipSeconds() * 1000;
 
         private async void ExportButton_Click(object sender, RoutedEventArgs e)
         {
@@ -744,13 +753,13 @@ namespace TrackMixerv2
             var badgeBrush = Application.Current.Resources["ControlFillColorSecondaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
             for (int i = 0; i < items.Count; i++)
             {
-                (KeybindAction action, string label) = items[i];
+                (KeybindAction action, _) = items[i];
                 int row = i / columns;
                 int column = i % columns;
 
                 var labelBlock = new TextBlock
                 {
-                    Text = label,
+                    Text = KeybindStore.GetActionLabel(action),
                     FontSize = 11,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     TextWrapping = TextWrapping.NoWrap,

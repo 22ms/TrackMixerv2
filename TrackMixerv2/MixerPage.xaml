@@ -78,11 +78,20 @@
 
                DefaultButton="Primary">
 
-            <StackPanel>
+            <StackPanel Spacing="12">
 
                 <CheckBox x:Name="DragAndDropCheckBox" Content="Open drag-and-drop on new tab"/>
 
                 <CheckBox x:Name="DoubleClickCheckBox" Content="Open double-click on new tab"/>
+
+                <TextBlock Text="Skip amount (seconds)" />
+                <NumberBox x:Name="SkipSecondsNumberBox"
+                           Minimum="1"
+                           Maximum="300"
+                           Value="5"
+                           SmallChange="1"
+                           LargeChange="5"
+                           HorizontalAlignment="Stretch" />
 
             </StackPanel>
 
@@ -282,7 +291,6 @@
                                                SpinButtonPlacementMode="Compact"
                                                SmallChange="1"
                                                LargeChange="10"
-                                               Width="40"
                                                FontSize="12"/>
                                     <ComboBox x:Name="PlaylistFilterTimeUnit"
                                               SelectedIndex="0"

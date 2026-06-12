@@ -12,7 +12,10 @@ public static class LocalSettingsStore
         public const string DoubleClickOnNewTab = "DoubleClickOnNewTab";
         public const string DragAndDropOnNewTab = "DragAndDropOnNewTab";
         public const string RecentVideo = "RecentVideo";
+        public const string SkipSeconds = "SkipSeconds";
     }
+
+    public const int DefaultSkipSeconds = 5;
 
     private static readonly object Lock = new();
     private static Dictionary<string, object>? cache;
@@ -61,6 +64,26 @@ public static class LocalSettingsStore
             _ => value.ToString(),
         };
     }
+
+    public static int GetInt(string key, int defaultValue = 0)
+    {
+        if (!TryGetValue(key, out object? value) || value == null)
+            return defaultValue;
+
+        return value switch
+        {
+            int i => i,
+            long l => (int)l,
+            string s when int.TryParse(s, out int parsed) => parsed,
+            _ => defaultValue,
+        };
+    }
+
+    public static int GetSkipSeconds(int defaultValue = DefaultSkipSeconds) =>
+        Math.Max(1, GetInt(Keys.SkipSeconds, defaultValue));
+
+    public static void SetSkipSeconds(int seconds) =>
+        Set(Keys.SkipSeconds, Math.Max(1, seconds));
 
     public static void SetBool(string key, bool value) => Set(key, value);
 
@@ -111,9 +134,14 @@ public static class LocalSettingsStore
             JObject json = JObject.Parse(File.ReadAllText(JsonPath));
             var loaded = new Dictionary<string, object>(StringComparer.Ordinal);
             foreach (var property in json.Properties())
-                loaded[property.Name] = property.Value.Type == JTokenType.Boolean
-                    ? property.Value.Value<bool>()
-                    : property.Value.ToString();
+            {
+                loaded[property.Name] = property.Value.Type switch
+                {
+                    JTokenType.Boolean => property.Value.Value<bool>(),
+                    JTokenType.Integer => property.Value.Value<int>(),
+                    _ => property.Value.ToString(),
+                };
+            }
 
             return loaded;
         }
