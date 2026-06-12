@@ -18,10 +18,8 @@ public static class AppState
     public const string TrackMetadataJsonEnvVar = "TRACKMIXER_METADATA_PATH";
 
     public static string TrackMetadataJson =>
-        Environment.GetEnvironmentVariable(TrackMetadataJsonEnvVar)
-        ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "TrackMixerv2",
+        AppPaths.ResolveDataFilePath(
+            Environment.GetEnvironmentVariable(TrackMetadataJsonEnvVar),
             "track_metadata.json");
 
     public static List<string>? ROOT_FOLDERS;

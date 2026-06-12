@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $fixtureDir = Join-Path $root "TrackMixerv2.UITests\Fixtures"
-$fixturePath = Join-Path $fixtureDir "uitest-clip.mp4"
+$multiTrackFixturePath = Join-Path $fixtureDir "uitest-clip.mp4"
+$singleTrackFixturePath = Join-Path $fixtureDir "uitest-clip-single.mp4"
 
 New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
 
@@ -22,6 +23,17 @@ if (-not $ffmpeg) {
     -metadata:s:a:1 title=Mic `
     -metadata:s:a:2 title=Discord `
     -movflags +faststart `
-    $fixturePath
+    $multiTrackFixturePath
 
-Write-Host "Wrote $fixturePath ($((Get-Item $fixturePath).Length) bytes, 3 audio tracks)"
+& $ffmpeg.Source -y `
+    -f lavfi -i "color=c=blue:s=160x120:d=1" `
+    -f lavfi -i "sine=frequency=660:duration=1" `
+    -map 0:v:0 -map 1:a:0 `
+    -c:v libx264 -pix_fmt yuv420p -profile:v baseline `
+    -c:a aac -b:a 64k `
+    -metadata:s:a:0 title=Single `
+    -movflags +faststart `
+    $singleTrackFixturePath
+
+Write-Host "Wrote $multiTrackFixturePath ($((Get-Item $multiTrackFixturePath).Length) bytes, 3 audio tracks)"
+Write-Host "Wrote $singleTrackFixturePath ($((Get-Item $singleTrackFixturePath).Length) bytes, 1 audio track)"

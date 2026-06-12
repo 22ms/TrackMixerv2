@@ -25,11 +25,12 @@ namespace TrackMixerv2
     public sealed partial class MainWindow : Window
     {
         private DispatcherQueue dispatcherQueue;
-        public static string TM_ENV_NAME = "TRACKMIXER_ROOT_FOLDERS";
         private string[] launchFiles = null;
         public static bool MainWindowActivated;
         public static MainWindow Instance;
-        private static string tempFilesRecordPath = Path.Combine(Path.GetTempPath(), "TrackMixerTempFiles.txt");
+        private MixedMediaPlayer _fullScreenPlayer;
+        private FrameworkElement _fullScreenPlayerHost;
+        public bool IsPlayerFullScreen { get; private set; }
 
         public MainWindow(string[] files)
         {
@@ -37,11 +38,7 @@ namespace TrackMixerv2
             InitializeComponent();
             if (UiTestBootstrap.IsEnabled)
                 Title = "Track Mixer UI Test";
-            string folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TrackMixerv2");
-            if (!Directory.Exists(folderPath))
-            {
-                Directory.CreateDirectory(folderPath);
-            }
+            AppPaths.EnsureDataDirectory();
             string metadataPath = AppState.TrackMetadataJson;
             string metadataDirectory = Path.GetDirectoryName(metadataPath);
             if (!string.IsNullOrWhiteSpace(metadataDirectory) && !Directory.Exists(metadataDirectory))
@@ -95,11 +92,71 @@ namespace TrackMixerv2
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
+            ExitPlayerFullScreen();
             CustomDragRegion.Loaded -= CustomDragRegion_Loaded;
             SizeChanged -= MainWindow_SizeChanged;
             TabView.LayoutUpdated -= TabView_LayoutUpdated;
             TabView.AddTabButtonClick -= TabView_AddTabButtonClick;
             TabView.TabCloseRequested -= TabView_TabCloseRequested;
+        }
+
+        public void TogglePlayerFullScreen(MixedMediaPlayer player)
+        {
+            if (IsPlayerFullScreen)
+                ExitPlayerFullScreen();
+            else
+                EnterPlayerFullScreen(player);
+        }
+
+        public void EnterPlayerFullScreen(MixedMediaPlayer player)
+        {
+            if (player == null || IsPlayerFullScreen)
+                return;
+
+            _fullScreenPlayer = player;
+            _fullScreenPlayerHost = player.Parent as FrameworkElement;
+            if (_fullScreenPlayerHost is Border hostBorder)
+                hostBorder.Child = null;
+
+            PlayerFullScreenHost.Children.Add(player);
+            PlayerFullScreenOverlay.Visibility = Visibility.Visible;
+            TabView.Visibility = Visibility.Collapsed;
+            player.SetFullScreenButtonState(true);
+            AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+            IsPlayerFullScreen = true;
+        }
+
+        public void ExitPlayerFullScreen()
+        {
+            if (!IsPlayerFullScreen || _fullScreenPlayer == null)
+                return;
+
+            PlayerFullScreenHost.Children.Remove(_fullScreenPlayer);
+            if (_fullScreenPlayerHost is Border hostBorder)
+                hostBorder.Child = _fullScreenPlayer;
+
+            PlayerFullScreenOverlay.Visibility = Visibility.Collapsed;
+            TabView.Visibility = Visibility.Visible;
+            _fullScreenPlayer.SetFullScreenButtonState(false);
+            AppWindow.SetPresenter(AppWindowPresenterKind.Default);
+            IsPlayerFullScreen = false;
+            _fullScreenPlayer = null;
+            _fullScreenPlayerHost = null;
+        }
+
+        public void ExitPlayerFullScreenIfShowing(MixedMediaPlayer player)
+        {
+            if (IsPlayerFullScreen && _fullScreenPlayer == player)
+                ExitPlayerFullScreen();
+        }
+
+        private void ExitPlayerFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (!IsPlayerFullScreen)
+                return;
+
+            ExitPlayerFullScreen();
+            args.Handled = true;
         }
 
         private void TabView_LayoutUpdated(object sender, object e)
@@ -134,17 +191,12 @@ namespace TrackMixerv2
         private async void TabView_Loaded(object sender, RoutedEventArgs e)
         {
             DisableTabStops(TabView);
-            AppState.ROOT_FOLDERS = new List<string>();
-            string env = Environment.GetEnvironmentVariable(TM_ENV_NAME);
-            if (env != null)
-                AppState.ROOT_FOLDERS = Environment.GetEnvironmentVariable(TM_ENV_NAME).Split(';').ToList();
+            AppState.ROOT_FOLDERS = UiTestBootstrap.ResolveRootFoldersFromEnvironment().ToList();
 
             if (UiTestBootstrap.SuppressRootFolderPrompt)
                 RootFolderPromptSuppressed = true;
 
-            if (!string.IsNullOrWhiteSpace(UiTestBootstrap.RootFolder))
-                AppState.ROOT_FOLDERS = new List<string> { UiTestBootstrap.RootFolder };
-            else if (launchFiles != null && launchFiles.Length > 0)
+            if (AppState.ROOT_FOLDERS.Count == 0 && launchFiles != null && launchFiles.Length > 0)
             {
                 string? clipDirectory = Path.GetDirectoryName(launchFiles[0]);
                 if (!string.IsNullOrWhiteSpace(clipDirectory))
@@ -165,7 +217,15 @@ namespace TrackMixerv2
             if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.RecentVideosJson))
             {
                 string recentVideosJson = LocalSettingsStore.GetString(LocalSettingsStore.Keys.RecentVideosJson) ?? "[]";
-                recentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson) ?? new List<string>();
+                var storedRecentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson) ?? new List<string>();
+                recentVideos = Helper.FilterExistingPaths(storedRecentVideos);
+                if (recentVideos.Count != storedRecentVideos.Count)
+                {
+                    LocalSettingsStore.SetString(
+                        LocalSettingsStore.Keys.RecentVideosJson,
+                        JsonConvert.SerializeObject(recentVideos));
+                }
+
                 hasRecentVideos = recentVideos.Count > 0;
             }
 
@@ -187,6 +247,8 @@ namespace TrackMixerv2
                     recentVideos.Add(page.path);
                 }
             }
+
+            recentVideos = Helper.FilterExistingPaths(recentVideos);
             string recentVideosJson = JsonConvert.SerializeObject(recentVideos);
             LocalSettingsStore.SetString(LocalSettingsStore.Keys.RecentVideosJson, recentVideosJson);
         }
@@ -253,7 +315,7 @@ namespace TrackMixerv2
             string newFolder = await PickFolderDialog();
             if (newFolder == null) return false;
             AppState.ROOT_FOLDERS.Add(newFolder);
-            Task.Run(() => Environment.SetEnvironmentVariable(TM_ENV_NAME, string.Join(';', AppState.ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
+            Task.Run(() => Environment.SetEnvironmentVariable(AppPaths.RootFoldersEnvVar, string.Join(';', AppState.ROOT_FOLDERS), EnvironmentVariableTarget.User)); // if we await this, it takes too long. so just pray.
 
             {
                 if (TabView.SelectedItem is TabViewItem tabViewItem && tabViewItem.Content is MixerPage page)
@@ -292,6 +354,7 @@ namespace TrackMixerv2
 
             if (tab.Content is MixerPage page)
             {
+                ExitPlayerFullScreenIfShowing(page.MixedMediaPlayer);
                 page.DragOver -= MixedMediaPlayer_DragOver;
                 page.Drop -= MixedMediaPlayer_Drop;
                 page.OpenFileFlyout.Click -= MenuFlyoutItem_Click;
@@ -330,6 +393,9 @@ namespace TrackMixerv2
         public async void AddNewTabs(string[] files, bool onNewTab = true)
         {
             if (files == null || files.Length == 0) return;
+
+            files = Helper.FilterExistingPaths(files).ToArray();
+            if (files.Length == 0) return;
 
             if (onNewTab)
             {
@@ -497,6 +563,7 @@ namespace TrackMixerv2
         }
         private void CleanupTemporaryFiles()
         {
+            string tempFilesRecordPath = AppPaths.TempFilesRecordPath;
             if (File.Exists(tempFilesRecordPath))
             {
                 var files = File.ReadAllLines(tempFilesRecordPath);
@@ -836,9 +903,10 @@ namespace TrackMixerv2
 
                 if (clipboardOnly)
                 {
-                    string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
+                    Directory.CreateDirectory(AppPaths.ScratchDirectory);
+                    string tempPath = Path.Combine(AppPaths.ScratchDirectory, $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
 
-                    File.AppendAllLines(tempFilesRecordPath, new[] { tempPath });
+                    File.AppendAllLines(AppPaths.TempFilesRecordPath, new[] { tempPath });
 
                     conversion.SetOutput(tempPath);
                     conversion.SetOverwriteOutput(true);

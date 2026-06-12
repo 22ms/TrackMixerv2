@@ -31,8 +31,7 @@
                                                IsCompact="False"
                                                IsZoomButtonVisible="False"
                                                IsZoomEnabled="False"
-                                               
-                                        Style="{StaticResource myTransportControlsStyle}"
+                                               Style="{StaticResource myTransportControlsStyle}"
                                                >
                 </local:MixedMediaPlayerControl>
             </MediaPlayerElement.TransportControls>

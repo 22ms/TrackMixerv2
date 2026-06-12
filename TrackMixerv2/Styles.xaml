@@ -531,6 +531,7 @@
                                             <AppBarButton x:Name="NextTrackButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
                                                           MediaTransportControlsHelper.DropoutOrder="3"
+                                                          AutomationProperties.AutomationId="NextTrackButton"
                                                           Visibility="Collapsed"
                                                           >
                                                 <AppBarButton.Icon>
@@ -597,34 +598,15 @@
 
                                                 </AppBarButton.Flyout>
                                             </AppBarButton>
-                                            <AppBarButton x:Name="ZoomButton"
+                                            <AppBarButton x:Name="FullScreenButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="9">
+                                                          MediaTransportControlsHelper.DropoutOrder="9"
+                                                          AutomationProperties.AutomationId="FullScreenButton"
+                                                          ToolTipService.ToolTip="Fullscreen">
                                                 <AppBarButton.Icon>
-                                                    <FontIcon Glyph="&#xE799;" />
+                                                    <FontIcon x:Name="FullScreenSymbol" Glyph="&#xE740;" />
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
-                                            <!--<AppBarButton x:Name="CastButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          MediaTransportControlsHelper.DropoutOrder="11">
-                                                <AppBarButton.Icon>
-                                                    <FontIcon Glyph="?" />
-                                                </AppBarButton.Icon>
-                                            </AppBarButton>-->
-                                            <!-- TODO 39683362: Uncomment once Full Screen is supported -->
-                                            <!-- <AppBarButton x:Name='CompactOverlayButton'
-                          Style='{StaticResource AppBarButtonStyle}'
-                          MediaTransportControlsHelper.DropoutOrder='24'
-                          Visibility='Collapsed'>
-                        <AppBarButton.Icon>
-                          <FontIcon Glyph="&#xE8B9;" />
-                        </AppBarButton.Icon>
-                      </AppBarButton>
-                      <AppBarButton x:Name="FullWindowButton" Style="{StaticResource AppBarButtonStyle}" MediaTransportControlsHelper.DropoutOrder="17">
-                        <AppBarButton.Icon>
-                          <SymbolIcon x:Name="FullWindowSymbol" Symbol="FullScreen" />
-                        </AppBarButton.Icon>
-                      </AppBarButton> -->
                                         </CommandBar.PrimaryCommands>
                                     </CommandBar>
                                 </Border>

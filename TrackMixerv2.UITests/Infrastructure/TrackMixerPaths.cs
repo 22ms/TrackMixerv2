@@ -2,9 +2,11 @@ namespace TrackMixerv2.UITests.Infrastructure;
 
 internal static class TrackMixerPaths
 {
-    private const string FixtureClipName = "uitest-clip.mp4";
+    public const string MultiTrackFixtureName = "uitest-clip.mp4";
+    public const string SingleTrackFixtureName = "uitest-clip-single.mp4";
 
     public const int FixtureAudioTrackCount = 3;
+    public const int SingleTrackFixtureAudioTrackCount = 1;
 
     private static readonly string[] RelativeExePaths =
     [
@@ -33,9 +35,9 @@ internal static class TrackMixerPaths
             "TrackMixerv2.exe not found. Build the UI-test app first: scripts/run-uitests.ps1");
     }
 
-    public static string ResolveFixtureClipPath()
+    public static string ResolveFixtureClipPath(string fixtureName = MultiTrackFixtureName)
     {
-        string fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", FixtureClipName);
+        string fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixtureName);
         if (File.Exists(fixturePath))
             return fixturePath;
 
@@ -43,11 +45,11 @@ internal static class TrackMixerPaths
             $"UI test fixture clip not found at '{fixturePath}'. Run scripts/generate-uitest-fixture.ps1");
     }
 
-    public static string CreateTempClipLibrary(string clipName = FixtureClipName)
+    public static string CreateTempClipLibrary(string clipName = MultiTrackFixtureName)
     {
         string root = CreateTempLibraryRoot();
         string clipPath = Path.Combine(root, clipName);
-        File.Copy(ResolveFixtureClipPath(), clipPath, overwrite: true);
+        File.Copy(ResolveFixtureClipPath(clipName), clipPath, overwrite: true);
         return clipPath;
     }
 
@@ -67,6 +69,17 @@ internal static class TrackMixerPaths
         File.Copy(fixture, clipA, overwrite: true);
         File.Copy(fixture, clipB, overwrite: true);
         return (clipA, clipB, root);
+    }
+
+    public static (string MultiTrackClip, string SingleTrackClip, string Root) CreateMixedTrackCountLibrary()
+    {
+        string multiTrackClip = CreateTempClipLibrary();
+        string root = Path.GetDirectoryName(multiTrackClip)!;
+        string singleTrackClip = Path.Combine(root, SingleTrackFixtureName);
+        File.Copy(ResolveFixtureClipPath(SingleTrackFixtureName), singleTrackClip, overwrite: true);
+        File.SetCreationTime(multiTrackClip, DateTime.Now.AddMinutes(-1));
+        File.SetCreationTime(singleTrackClip, DateTime.Now);
+        return (multiTrackClip, singleTrackClip, root);
     }
 
     public static string CreateIsolatedTestHome()

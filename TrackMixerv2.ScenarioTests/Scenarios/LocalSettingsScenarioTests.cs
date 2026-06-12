@@ -31,6 +31,29 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     }
 
     [Fact]
+    public void FilterExistingPaths_removes_missing_files()
+    {
+        string existing = Path.Combine(Path.GetTempPath(), "TrackMixer-existing-" + Guid.NewGuid().ToString("N") + ".mp4");
+        File.WriteAllText(existing, "fixture");
+
+        try
+        {
+            var filtered = Helper.FilterExistingPaths(
+            [
+                existing,
+                Path.Combine(Path.GetTempPath(), "TrackMixer-missing-" + Guid.NewGuid().ToString("N") + ".mp4"),
+            ]);
+
+            Assert.Single(filtered);
+            Assert.Equal(existing, filtered[0]);
+        }
+        finally
+        {
+            File.Delete(existing);
+        }
+    }
+
+    [Fact]
     public void Recent_videos_list_matches_save_recent_videos_shape()
     {
         var recentVideos = new List<string>

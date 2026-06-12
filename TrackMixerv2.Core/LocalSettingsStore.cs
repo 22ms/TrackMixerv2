@@ -20,10 +20,8 @@ public static class LocalSettingsStore
     public const string JsonPathEnvVar = "TRACKMIXER_LOCAL_SETTINGS_PATH";
 
     public static string JsonPath =>
-        Environment.GetEnvironmentVariable(JsonPathEnvVar)
-        ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "TrackMixerv2",
+        AppPaths.ResolveDataFilePath(
+            Environment.GetEnvironmentVariable(JsonPathEnvVar),
             "local_settings.json");
 
     public static void ResetCache()

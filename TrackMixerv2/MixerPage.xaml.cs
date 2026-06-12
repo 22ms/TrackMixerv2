@@ -40,6 +40,7 @@ namespace TrackMixerv2
             this.path = path;
             VideoTitle.Text = Helper.GetTitleFromPath(path);
             MixedMediaPlayer.Loaded += MixedMediaPlayer_Loaded;
+            MixedMediaPlayer.FullScreenToggleRequested += MixedMediaPlayer_FullScreenToggleRequested;
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.MediaFailed += MediaPlayer_MediaFailed;
             ratingValueChangedToken = RatingSlider.RegisterPropertyChangedCallback(RangeBase.ValueProperty, OnRatingValueChanged);
             PlaylistFilterTimeValue.ValueChanged += PlaylistFilterTimeValue_ValueChanged;
@@ -58,6 +59,11 @@ namespace TrackMixerv2
                 LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
                 LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
             }
+        }
+
+        private void MixedMediaPlayer_FullScreenToggleRequested(object sender, EventArgs e)
+        {
+            MainWindow.Instance?.TogglePlayerFullScreen(MixedMediaPlayer);
         }
 
         private async void OpenLink_Click(object sender, RoutedEventArgs e)
@@ -360,6 +366,7 @@ namespace TrackMixerv2
             PlaylistFilterChrono.Click -= PlaylistFilterMode_Click;
             PlaylistFilterRating.Click -= PlaylistFilterMode_Click;
             MixedMediaPlayer.Loaded -= MixedMediaPlayer_Loaded;
+            MixedMediaPlayer.FullScreenToggleRequested -= MixedMediaPlayer_FullScreenToggleRequested;
             MixedMediaPlayer.MediaLoaded -= MixedMediaPlayer_MediaLoaded;
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged -= MediaPlayer_CurrentStateChanged;
             for (int i = 0; i < VolumeSliders.Count && i < VolumeSliderChangedHandlers.Count; i++)

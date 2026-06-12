@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
@@ -40,10 +41,12 @@ namespace TrackMixerv2
         private DispatcherQueue dispatcherQueue;
         public AutoplayMode AutoplayMode = AutoplayMode.Off;
         public event EventHandler<MediaLoadedEventArgs> MediaLoaded;
+        public event EventHandler FullScreenToggleRequested;
         public PlaylistConfig PlaylistConfig;
 
         private string currentVideo;
         private string preChangeVideo;
+        private int _openMediaGeneration;
 
         public MixedMediaPlayer()
         {
@@ -183,15 +186,31 @@ namespace TrackMixerv2
 
         public async void OpenMediaAsync(string filePath)
         {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                return;
+
+            int generation = ++_openMediaGeneration;
             Dispose();
             currentVideo = filePath;
             LocalSettingsStore.SetString(LocalSettingsStore.Keys.RecentVideo, currentVideo);
-            StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
+            StorageFile file;
+            try
+            {
+                file = await StorageFile.GetFileFromPathAsync(filePath);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
+            {
+                Trace.WriteLine($"OpenMediaAsync failed for '{filePath}': {ex.Message}");
+                return;
+            }
             MediaSource source = MediaSource.CreateFromStorageFile(file);
             MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
             MainMediaPlayer.MediaPlayer.Source = mainPlaybackItem;
             MediaOpenedHandler = new TypedEventHandler<MediaPlayer, object>(async (mainPlayer, e) =>
             {
+                if (generation != _openMediaGeneration)
+                    return;
+
                 MediaPlaybackItem loadedMedia = mainPlayer.Source as MediaPlaybackItem;
                 if (loadedMedia == null) return;
 
@@ -218,6 +237,9 @@ namespace TrackMixerv2
                 {
                     for (int i = 1; i < loadedMedia.AudioTracks.Count; i++)
                     {
+                        if (generation != _openMediaGeneration)
+                            return;
+
                         int currentIndex = i;
                         MediaPlayer mediaPlayer = new MediaPlayer();
                         mediaPlayer.AutoPlay = true;
@@ -227,6 +249,12 @@ namespace TrackMixerv2
                         MediaOpened.Add(false);
                         var trackOpenedHandler = new TypedEventHandler<MediaPlayer, object>((trackPlayer, o) =>
                         {
+                            if (generation != _openMediaGeneration)
+                            {
+                                CloseTrackPlayer(trackPlayer);
+                                return;
+                            }
+
                             (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
                             TrackPlayers.Add(trackPlayer);
                             MediaOpened[currentIndex - 1] = true;
@@ -234,6 +262,9 @@ namespace TrackMixerv2
                             {
                                 dispatcherQueue.TryEnqueue(() =>
                                 {
+                                    if (generation != _openMediaGeneration)
+                                        return;
+
                                     List<MediaPlayer> list = new List<MediaPlayer>();
                                     list.Add(MainMediaPlayer.MediaPlayer);
                                     list.AddRange(TrackPlayers);
@@ -249,6 +280,9 @@ namespace TrackMixerv2
                 {
                     dispatcherQueue.TryEnqueue(() =>
                     {
+                        if (generation != _openMediaGeneration)
+                            return;
+
                         List<MediaPlayer> list = new List<MediaPlayer>();
                         list.Add(MainMediaPlayer.MediaPlayer);
                         MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
@@ -360,6 +394,19 @@ namespace TrackMixerv2
             }
         }
 
+        public void SetFullScreenButtonState(bool isFullScreen)
+        {
+            if (myMixedMediaPlayerControl?.FullScreenSymbol != null)
+                myMixedMediaPlayerControl.FullScreenSymbol.Glyph = isFullScreen ? "\uE7F4" : "\uE740";
+            if (myMixedMediaPlayerControl?.FullScreenButton != null)
+                ToolTipService.SetToolTip(myMixedMediaPlayerControl.FullScreenButton, isFullScreen ? "Exit fullscreen" : "Fullscreen");
+        }
+
+        private void FullScreenButton_Click(object sender, RoutedEventArgs e)
+        {
+            FullScreenToggleRequested?.Invoke(this, EventArgs.Empty);
+        }
+
         public void RegisterControlEvents()
         {
             if (myMixedMediaPlayerControl != null)
@@ -396,6 +443,11 @@ namespace TrackMixerv2
                 {
                     myMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
                     myMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
+                }
+                if (myMixedMediaPlayerControl.FullScreenButton != null)
+                {
+                    myMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
+                    myMixedMediaPlayerControl.FullScreenButton.Click += FullScreenButton_Click;
                 }
                 myMixedMediaPlayerControl.Loaded -= MyMixedMediaPlayerControl_Loaded;
                 myMixedMediaPlayerControl.Loaded += MyMixedMediaPlayerControl_Loaded;
@@ -436,6 +488,8 @@ namespace TrackMixerv2
                     myMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
                     myMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
                 }
+                if (myMixedMediaPlayerControl.FullScreenButton != null)
+                    myMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
                 myMixedMediaPlayerControl.Loaded -= MyMixedMediaPlayerControl_Loaded;
             }
         }
@@ -475,11 +529,21 @@ namespace TrackMixerv2
                 }
                 MainMediaPlayer.DragStarting -= MainMediaPlayer_DragStarting;
             }
-            foreach (var kvp in TrackOpenedHandlers)
+            foreach (var kvp in TrackOpenedHandlers.ToList())
             {
                 kvp.Key.MediaOpened -= kvp.Value;
+                CloseTrackPlayer(kvp.Key);
             }
             TrackOpenedHandlers.Clear();
+        }
+
+        private static void CloseTrackPlayer(MediaPlayer? trackPlayer)
+        {
+            if (trackPlayer == null)
+                return;
+
+            trackPlayer.Pause();
+            trackPlayer.Source = null;
         }
 
         public static void OffsetMediaPlayerPlaybackPosition(MediaPlayer mediaPlayer, int offsetMillis)
@@ -518,20 +582,20 @@ namespace TrackMixerv2
             DeRegisterPlayerEvents();
             DeRegisterControlEvents();
             MediaOpened = new List<bool>();
+            MediaOpenedHandler = null;
+            MediaFailedHandler = null;
+
             if (MainMediaPlayer?.MediaPlayer != null)
             {
                 MainMediaPlayer.MediaPlayer.Pause();
+                MainMediaPlayer.MediaPlayer.Source = null;
             }
+
             if (TrackPlayers != null)
             {
                 foreach (MediaPlayer trackPlayer in TrackPlayers)
-                {
-                    if (trackPlayer != null)
-                    {
-                        trackPlayer.Pause();
-                        trackPlayer.Source = null;
-                    }
-                }
+                    CloseTrackPlayer(trackPlayer);
+
                 TrackPlayers.Clear();
             }
         }

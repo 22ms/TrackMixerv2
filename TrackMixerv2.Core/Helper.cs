@@ -42,4 +42,11 @@ public static class Helper
 
         return VideoExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
     }
+
+    public static List<string> FilterExistingPaths(IEnumerable<string> paths)
+    {
+        return paths
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .ToList();
+    }
 }

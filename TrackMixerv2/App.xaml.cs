@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Dispatching;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
 using System;
@@ -24,8 +24,7 @@ namespace TrackMixerv2
                 {
                     try
                     {
-                        string logPath = Path.Combine(Path.GetTempPath(), "TrackMixer-uitest-crash.txt");
-                        File.WriteAllText(logPath, e.Exception?.ToString() ?? "Unknown UI test crash");
+                        File.WriteAllText(AppPaths.UiTestCrashLogPath, e.Exception?.ToString() ?? "Unknown UI test crash");
                     }
                     catch
                     {

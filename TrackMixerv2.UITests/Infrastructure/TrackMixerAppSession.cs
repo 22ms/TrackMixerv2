@@ -13,6 +13,7 @@ public sealed class TrackMixerAppSession : IDisposable
     private readonly string? _clipDirectory;
     private readonly bool _deleteClipDirectoryOnDispose;
     private readonly Dictionary<string, string> _extraEnvironment = new(StringComparer.Ordinal);
+    private string? _ownedTestHomeDirectory;
 
     public UIA3Automation Automation { get; } = new();
     public Application Application { get; private set; } = null!;
@@ -41,6 +42,7 @@ public sealed class TrackMixerAppSession : IDisposable
 
     public void Launch()
     {
+        EnsureIsolatedTestStorage();
         KillExistingInstances();
 
         string exePath = TrackMixerPaths.ResolveExePath();
@@ -137,6 +139,13 @@ public sealed class TrackMixerAppSession : IDisposable
         }
     }
 
+    public void ClickNextTrack()
+    {
+        var nextTrack = FindByAutomationId("NextTrackButton")?.AsButton()
+            ?? throw new InvalidOperationException("Next track button was not found.");
+        nextTrack.Invoke();
+    }
+
     public int GetVolumeSliderCount()
     {
         int count = 0;
@@ -168,12 +177,27 @@ public sealed class TrackMixerAppSession : IDisposable
         Close();
         Automation.Dispose();
 
+        if (!string.IsNullOrWhiteSpace(_ownedTestHomeDirectory) &&
+            Directory.Exists(_ownedTestHomeDirectory))
+        {
+            try { Directory.Delete(_ownedTestHomeDirectory, recursive: true); } catch { }
+        }
+
         if (_deleteClipDirectoryOnDispose &&
             !string.IsNullOrWhiteSpace(_clipDirectory) &&
             Directory.Exists(_clipDirectory))
         {
             try { Directory.Delete(_clipDirectory, recursive: true); } catch { }
         }
+    }
+
+    private void EnsureIsolatedTestStorage()
+    {
+        if (_extraEnvironment.ContainsKey(LocalSettingsStore.JsonPathEnvVar))
+            return;
+
+        _ownedTestHomeDirectory = TrackMixerPaths.CreateIsolatedTestHome();
+        SetTestStorageDirectory(_ownedTestHomeDirectory);
     }
 
     private static void KillExistingInstances()
