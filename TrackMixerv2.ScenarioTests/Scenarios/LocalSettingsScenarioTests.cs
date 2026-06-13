@@ -42,6 +42,16 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     }
 
     [Fact]
+    public void Slider_wheel_speed_round_trip_through_disk()
+    {
+        LocalSettingsStore.SetSliderWheelSpeed(4);
+        LocalSettingsStore.ResetCache();
+
+        Assert.Equal(4, LocalSettingsStore.GetSliderWheelSpeed());
+        Assert.Equal(20, SliderWheelRules.GetWheelStep(0, 5, LocalSettingsStore.GetSliderWheelSpeed()));
+    }
+
+    [Fact]
     public void FilterExistingPaths_removes_missing_files()
     {
         string existing = Path.Combine(Path.GetTempPath(), "TrackMixer-existing-" + Guid.NewGuid().ToString("N") + ".mp4");

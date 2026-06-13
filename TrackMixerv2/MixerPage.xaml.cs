@@ -90,6 +90,7 @@ namespace TrackMixerv2
         private async void Preferences_Click(object sender, RoutedEventArgs e)
         {
             SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
+            SliderWheelSpeedNumberBox.Value = LocalSettingsStore.GetSliderWheelSpeed();
 
             var result = await PreferencesDialog.ShowAsync();
 
@@ -98,6 +99,7 @@ namespace TrackMixerv2
                 LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
                 LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
                 LocalSettingsStore.SetSkipSeconds((int)Math.Round(SkipSecondsNumberBox.Value));
+                LocalSettingsStore.SetSliderWheelSpeed((int)Math.Round(SliderWheelSpeedNumberBox.Value));
                 RefreshKeybindList();
             }
         }
@@ -408,6 +410,7 @@ namespace TrackMixerv2
                     DoubleClickCheckBox.IsChecked = true;
 
                 SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
+                SliderWheelSpeedNumberBox.Value = LocalSettingsStore.GetSliderWheelSpeed();
 
                 initialLoaded = true;
             });

@@ -93,6 +93,19 @@
                            LargeChange="5"
                            HorizontalAlignment="Stretch" />
 
+                <TextBlock Text="Slider mouse wheel speed" />
+                <NumberBox x:Name="SliderWheelSpeedNumberBox"
+                           Minimum="1"
+                           Maximum="20"
+                           Value="2"
+                           SmallChange="1"
+                           LargeChange="1"
+                           HorizontalAlignment="Stretch" />
+                <TextBlock Text="Multiplies each slider's own step (volume, rating, progress, and transport)."
+                           TextWrapping="WrapWholeWords"
+                           Opacity="0.8"
+                           FontSize="12" />
+
             </StackPanel>
 
         </ContentDialog>

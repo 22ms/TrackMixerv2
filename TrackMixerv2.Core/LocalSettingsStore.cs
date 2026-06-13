@@ -13,9 +13,11 @@ public static class LocalSettingsStore
         public const string DragAndDropOnNewTab = "DragAndDropOnNewTab";
         public const string RecentVideo = "RecentVideo";
         public const string SkipSeconds = "SkipSeconds";
+        public const string SliderWheelSpeed = "SliderWheelSpeed";
     }
 
     public const int DefaultSkipSeconds = 5;
+    public const int DefaultSliderWheelSpeed = 2;
 
     private static readonly object Lock = new();
     private static Dictionary<string, object>? cache;
@@ -84,6 +86,12 @@ public static class LocalSettingsStore
 
     public static void SetSkipSeconds(int seconds) =>
         Set(Keys.SkipSeconds, Math.Max(1, seconds));
+
+    public static int GetSliderWheelSpeed(int defaultValue = DefaultSliderWheelSpeed) =>
+        Math.Max(1, GetInt(Keys.SliderWheelSpeed, defaultValue));
+
+    public static void SetSliderWheelSpeed(int speed) =>
+        Set(Keys.SliderWheelSpeed, Math.Max(1, speed));
 
     public static void SetBool(string key, bool value) => Set(key, value);
 

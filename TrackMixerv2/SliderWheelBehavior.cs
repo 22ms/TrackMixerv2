@@ -45,5 +45,8 @@ public static class SliderWheelBehavior
     }
 
     internal static double GetWheelStep(Slider slider) =>
-        SliderWheelRules.GetWheelStep(slider.SmallChange, slider.TickFrequency);
+        SliderWheelRules.GetWheelStep(
+            slider.SmallChange,
+            slider.TickFrequency,
+            LocalSettingsStore.GetSliderWheelSpeed());
 }
