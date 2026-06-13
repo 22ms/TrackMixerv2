@@ -655,9 +655,34 @@
                                                         <FontIcon Glyph="&#xEC58;" />
                                                     </AppBarButton.Icon>
                                                     <AppBarButton.Flyout>
-                                                        <MenuFlyout x:Name="SpeedSelectMenuFlyout"
-                                                                    Placement="Top"
-                                                                    MenuFlyoutPresenterStyle="{StaticResource CompactMenuFlyoutPresenterStyle}" />
+                                                        <Flyout x:Name="SpeedSelectFlyout"
+                                                                FlyoutPresenterStyle="{StaticResource FlyoutStyle}"
+                                                                Placement="Top">
+                                                            <StackPanel x:Name="SpeedSelectFlyoutContent"
+                                                                        MinWidth="280"
+                                                                        Padding="12,10"
+                                                                        Spacing="4">
+                                                                <Slider x:Name="PlaybackRateSlider"
+                                                                        AutomationProperties.AutomationId="PlaybackRateSlider"
+                                                                        AutomationProperties.Name="Playback speed"
+                                                                        Margin="8,0"
+                                                                        HorizontalAlignment="Stretch"
+                                                                        IsThumbToolTipEnabled="False"
+                                                                        LargeChange="1"
+                                                                        Maximum="1"
+                                                                        Minimum="0"
+                                                                        SmallChange="1"
+                                                                        SnapsTo="StepValues"
+                                                                        StepFrequency="1"
+                                                                        TickFrequency="1"
+                                                                        TickPlacement="BottomRight"
+                                                                        local:SliderWheelBehavior.UseWheelSpeedMultiplier="False" />
+                                                                <Canvas x:Name="PlaybackRateTickLabelsCanvas"
+                                                                        Margin="8,0,8,2"
+                                                                        Height="16"
+                                                                        HorizontalAlignment="Stretch" />
+                                                            </StackPanel>
+                                                        </Flyout>
                                                     </AppBarButton.Flyout>
                                                 </AppBarButton>
                                             </StackPanel>

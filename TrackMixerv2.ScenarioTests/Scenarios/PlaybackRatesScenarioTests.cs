@@ -54,7 +54,7 @@ public sealed class PlaybackRatesScenarioTests : IDisposable
 
         Assert.Equal(
 
-            new[] { 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8 },
+            new[] { 1.25, 1.5, 2, 3, 4 },
 
             PlaybackRates.BoostRates.ToArray());
 
@@ -76,11 +76,11 @@ public sealed class PlaybackRatesScenarioTests : IDisposable
 
     [Theory]
 
-    [InlineData(2.3, 2.5)]
+    [InlineData(2.3, 2)]
 
     [InlineData(0.1, 1.25)]
 
-    [InlineData(10, 8)]
+    [InlineData(10, 4)]
 
     public void Normalize_boost_rate_snaps_to_nearest_transport_speed(double input, double expected) =>
 
@@ -97,6 +97,38 @@ public sealed class PlaybackRatesScenarioTests : IDisposable
     public void Normalize_slow_rate_snaps_to_nearest_transport_speed(double input, double expected) =>
 
         Assert.Equal(expected, PlaybackRates.NormalizeSlowRate(input));
+
+
+
+    [Fact]
+
+    public void Sanitize_transport_rates_accepts_any_rate_above_zero()
+
+    {
+
+        var sanitized = PlaybackRates.SanitizeTransportRates(new[] { 0.1, 1.0, 2.0 });
+
+
+
+        Assert.Equal(new[] { 0.1, 1.0, 2.0 }, sanitized);
+
+    }
+
+
+
+    [Fact]
+
+    public void Sanitize_transport_rates_rejects_zero_and_negative_rates()
+
+    {
+
+        var sanitized = PlaybackRates.SanitizeTransportRates(new[] { -1.0, 0.0, 0.5, 1.0 });
+
+
+
+        Assert.Equal(new[] { 0.5, 1.0 }, sanitized);
+
+    }
 
 
 

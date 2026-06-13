@@ -14,9 +14,22 @@ public static class SliderWheelBehavior
             typeof(SliderWheelBehavior),
             new PropertyMetadata(false, OnIsEnabledChanged));
 
+    public static readonly DependencyProperty UseWheelSpeedMultiplierProperty =
+        DependencyProperty.RegisterAttached(
+            "UseWheelSpeedMultiplier",
+            typeof(bool),
+            typeof(SliderWheelBehavior),
+            new PropertyMetadata(true));
+
     public static bool GetIsEnabled(DependencyObject obj) => (bool)obj.GetValue(IsEnabledProperty);
 
     public static void SetIsEnabled(DependencyObject obj, bool value) => obj.SetValue(IsEnabledProperty, value);
+
+    public static bool GetUseWheelSpeedMultiplier(DependencyObject obj) =>
+        (bool)obj.GetValue(UseWheelSpeedMultiplierProperty);
+
+    public static void SetUseWheelSpeedMultiplier(DependencyObject obj, bool value) =>
+        obj.SetValue(UseWheelSpeedMultiplierProperty, value);
 
     private static void OnIsEnabledChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
@@ -44,9 +57,15 @@ public static class SliderWheelBehavior
         e.Handled = true;
     }
 
-    internal static double GetWheelStep(Slider slider) =>
-        SliderWheelRules.GetWheelStep(
+    internal static double GetWheelStep(Slider slider)
+    {
+        int speedMultiplier = GetUseWheelSpeedMultiplier(slider)
+            ? LocalSettingsStore.GetSliderWheelSpeed()
+            : 1;
+
+        return SliderWheelRules.GetWheelStep(
             slider.SmallChange,
             slider.TickFrequency,
-            LocalSettingsStore.GetSliderWheelSpeed());
+            speedMultiplier);
+    }
 }

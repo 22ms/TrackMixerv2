@@ -179,7 +179,7 @@ namespace TrackMixerv2
             _editingTransportRates.Clear();
             _editingTransportRates.AddRange(PlaybackRates.All);
             RefreshTransportRatesList();
-            TransportRateAddNumberBox.Value = double.NaN;
+            TransportRateAddBox.Text = string.Empty;
         }
 
         private void RefreshTransportRatesList()
@@ -286,10 +286,9 @@ namespace TrackMixerv2
             RefreshTransportRatesEditorUi();
         }
 
-        private void AddTransportRate_Click(object sender, RoutedEventArgs e)
+        private void TransportRateAddBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
         {
-            double rate = TransportRateAddNumberBox.Value;
-            if (double.IsNaN(rate) || rate < PlaybackRates.MinTransportRate || rate > PlaybackRates.MaxTransportRate)
+            if (!DecimalInput.TryParse(args.QueryText, out double rate) || !PlaybackRates.IsValidTransportRate(rate))
                 return;
 
             rate = Math.Round(rate, 2);
@@ -299,7 +298,7 @@ namespace TrackMixerv2
             _editingTransportRates.Add(rate);
             _editingTransportRates.Sort();
             RefreshTransportRatesEditorUi();
-            TransportRateAddNumberBox.Value = double.NaN;
+            sender.Text = string.Empty;
         }
 
         private void ResetTransportRates_Click(object sender, RoutedEventArgs e)

@@ -54,13 +54,13 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     [Fact]
     public void Hold_keybind_speed_rates_round_trip_through_disk()
     {
-        LocalSettingsStore.SetSpeedBoostRate(3.5);
+        LocalSettingsStore.SetSpeedBoostRate(3);
         LocalSettingsStore.SetSpeedSlowRate(0.5);
         LocalSettingsStore.ResetCache();
 
-        Assert.Equal(3.5, LocalSettingsStore.GetSpeedBoostRate());
+        Assert.Equal(3, LocalSettingsStore.GetSpeedBoostRate());
         Assert.Equal(0.5, LocalSettingsStore.GetSpeedSlowRate());
-        Assert.Equal("Speed boost 3.5× (hold)", KeybindStore.GetActionLabel(KeybindAction.SpeedBoost));
+        Assert.Equal("Speed boost 3× (hold)", KeybindStore.GetActionLabel(KeybindAction.SpeedBoost));
         Assert.Equal("Slow motion 0.5× (hold)", KeybindStore.GetActionLabel(KeybindAction.SpeedSlow));
     }
 
@@ -86,7 +86,7 @@ public sealed class LocalSettingsScenarioTests : IDisposable
 
     [Theory]
     [InlineData(0.1, 1.25)]
-    [InlineData(10, 8)]
+    [InlineData(10, 4)]
     public void Hold_keybind_speed_rates_snap_to_transport_speeds(double boostInput, double expectedBoost)
     {
         LocalSettingsStore.SetSpeedBoostRate(boostInput);

@@ -29,7 +29,7 @@ public static class KeybindFocusPolicy
 
         return element switch
         {
-            TextBox or PasswordBox or NumberBox => FocusedControlKind.TextEntry,
+            TextBox or PasswordBox or NumberBox or AutoSuggestBox => FocusedControlKind.TextEntry,
             Slider => FocusedControlKind.Slider,
             Button or ToggleButton or DropDownButton or AppBarButton or AppBarToggleButton => FocusedControlKind.Button,
             MenuBar or MenuBarItem => FocusedControlKind.Menu,

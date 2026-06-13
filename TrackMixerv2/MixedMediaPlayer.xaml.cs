@@ -1,6 +1,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
@@ -494,10 +495,10 @@ namespace TrackMixerv2
                 }
 
                 customMixedMediaPlayerControl.EnsureCustomPlaybackRateFlyout();
-                foreach (var playbackRateOption in customMixedMediaPlayerControl.PlaybackRateOptions)
+                if (customMixedMediaPlayerControl.PlaybackRateSlider != null)
                 {
-                    playbackRateOption.Click -= PlaybackRateOption_Click;
-                    playbackRateOption.Click += PlaybackRateOption_Click;
+                    customMixedMediaPlayerControl.PlaybackRateSlider.ValueChanged -= PlaybackRateSlider_ValueChanged;
+                    customMixedMediaPlayerControl.PlaybackRateSlider.ValueChanged += PlaybackRateSlider_ValueChanged;
                 }
 
                 UpdateAutoplayFlyoutSelection();
@@ -509,9 +510,12 @@ namespace TrackMixerv2
             }
         }
 
-        private void PlaybackRateOption_Click(object sender, RoutedEventArgs e)
+        private void PlaybackRateSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
-            if (sender is RadioMenuFlyoutItem item && item.Tag is double rate)
+            if (customMixedMediaPlayerControl == null || customMixedMediaPlayerControl.IsSyncingPlaybackRateSlider)
+                return;
+
+            if (customMixedMediaPlayerControl.TryGetSelectedPlaybackRate(out double rate))
                 ChangePlaybackSpeed(rate);
         }
 
@@ -565,8 +569,8 @@ namespace TrackMixerv2
                 }
                 if (customMixedMediaPlayerControl.FullScreenButton != null)
                     customMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
-                foreach (var playbackRateOption in customMixedMediaPlayerControl.PlaybackRateOptions)
-                    playbackRateOption.Click -= PlaybackRateOption_Click;
+                if (customMixedMediaPlayerControl.PlaybackRateSlider != null)
+                    customMixedMediaPlayerControl.PlaybackRateSlider.ValueChanged -= PlaybackRateSlider_ValueChanged;
                 customMixedMediaPlayerControl.Loaded -= CustomMixedMediaPlayerControl_Loaded;
             }
         }

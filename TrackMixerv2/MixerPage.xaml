@@ -141,24 +141,12 @@
                     <TextBlock Text="Add a speed"
                                Opacity="0.8"
                                FontSize="12" />
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <NumberBox x:Name="TransportRateAddNumberBox"
-                                   Minimum="0.25"
-                                   Maximum="16"
-                                   SmallChange="0.25"
-                                   LargeChange="0.5"
-                                   PlaceholderText="e.g. 1.5"
-                                   HorizontalAlignment="Stretch" />
-                        <Button Grid.Column="1"
-                                Content="Add"
-                                Click="AddTransportRate_Click"
-                                VerticalAlignment="Bottom"
-                                MinWidth="72" />
-                    </Grid>
+                    <AutoSuggestBox x:Name="TransportRateAddBox"
+                                    PlaceholderText="e.g. 1.5 or 1,5"
+                                    QueryIcon="Add"
+                                    QuerySubmitted="TransportRateAddBox_QuerySubmitted"
+                                    HorizontalAlignment="Stretch"
+                                    ToolTipService.ToolTip="Add speed" />
                     <Button Content="Reset transport speeds to default"
                             Click="ResetTransportRates_Click"
                             HorizontalAlignment="Left" />
