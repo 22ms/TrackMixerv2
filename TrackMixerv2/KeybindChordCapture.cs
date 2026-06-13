@@ -7,10 +7,7 @@ namespace TrackMixerv2;
 public static class KeybindChordCapture
 {
   public static bool IsModifierKey(VirtualKey key) =>
-      key is VirtualKey.Control or VirtualKey.Shift or VirtualKey.Menu
-          or VirtualKey.LeftControl or VirtualKey.RightControl
-          or VirtualKey.LeftShift or VirtualKey.RightShift
-          or VirtualKey.LeftMenu or VirtualKey.RightMenu;
+      KeybindHoldRules.IsModifierVirtualKey((int)key);
 
   public static int GetCurrentModifiers()
   {

@@ -163,6 +163,20 @@ public sealed class TrackMixerAppSession : IDisposable
 
     public bool MixerPageIsLoaded() => FindByAutomationId("RatingSlider") != null;
 
+    public void ClickKeybindCell(string action)
+    {
+        // The cell is a Border (not surfaced in the UIA control view), but its content is
+        // hit-test transparent, so clicking the shortcut label's screen location lands on
+        // the underlying clickable cell and starts recording.
+        var target = FindByAutomationId($"KeybindCell_{action}")
+            ?? FindByAutomationId($"KeybindShortcut_{action}")
+            ?? throw new InvalidOperationException($"Keybind cell '{action}' was not found.");
+        target.Click();
+    }
+
+    public string? GetKeybindShortcut(string action) =>
+        FindByAutomationId($"KeybindShortcut_{action}")?.Name;
+
     public int GetVolumeSliderCount()
     {
         int count = 0;

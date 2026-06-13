@@ -20,8 +20,23 @@ public static class KeybindApplicator
             UIElement.KeyDownEvent,
             new KeyEventHandler((sender, args) => HandleMainWindowKey(window, args)),
             false);
+
+        window.RootGrid.AddHandler(
+            UIElement.KeyUpEvent,
+            new KeyEventHandler((sender, args) => HandleMainWindowKeyUp(window, args)),
+            true);
         _mainWindowHooked = true;
     }
+
+    private static void HandleMainWindowKeyUp(MainWindow window, KeyRoutedEventArgs args)
+    {
+        if (window.ActiveMixerPage?.TryHandleKeybindRecordingKeyUp(args) != true)
+            return;
+
+        args.Handled = true;
+    }
+
+    public static void RemoveMixerPage(MixerPage page) => _hookedMixerPages.Remove(page);
 
     public static void ApplyToMixerPage(MixerPage page)
     {
@@ -32,11 +47,24 @@ public static class KeybindApplicator
             UIElement.KeyDownEvent,
             new KeyEventHandler((sender, args) => HandleMixerPageKey(page, args)),
             false);
+
+        page.PageRootGrid.AddHandler(
+            UIElement.KeyUpEvent,
+            new KeyEventHandler((sender, args) => HandleMixerPageKeyUp(page, args)),
+            true);
+    }
+
+    private static void HandleMixerPageKeyUp(MixerPage page, KeyRoutedEventArgs args)
+    {
+        if (!page.TryHandleKeybindRecordingKeyUp(args))
+            return;
+
+        args.Handled = true;
     }
 
     private static void HandleMainWindowKey(MainWindow window, KeyRoutedEventArgs args)
     {
-        if (window.ActiveMixerPage?.TryHandleKeybindRecording(args) == true)
+        if (window.ActiveMixerPage?.TryHandleKeybindRecordingKeyDown(args) == true)
             return;
 
         if (!ShouldHandleKeybind(window.RootGrid, args))
@@ -55,7 +83,7 @@ public static class KeybindApplicator
 
     private static void HandleMixerPageKey(MixerPage page, KeyRoutedEventArgs args)
     {
-        if (page.TryHandleKeybindRecording(args))
+        if (page.TryHandleKeybindRecordingKeyDown(args))
             return;
 
         if (!ShouldHandleKeybind(page.PageRootGrid, args))
@@ -71,6 +99,9 @@ public static class KeybindApplicator
     private static bool ShouldHandleKeybind(UIElement scope, KeyRoutedEventArgs args)
     {
         if (args.Handled)
+            return false;
+
+        if (KeybindRecordingGate.IsRecording)
             return false;
 
         if (IsModifierKey(args.Key))

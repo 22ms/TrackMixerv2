@@ -20,6 +20,9 @@ public static class KeybindFormatter
 
   public static string Format(KeybindChord chord)
   {
+    if (KeybindHoldRules.IsModifierOnlyChord(chord))
+      return FormatKey(KeybindHoldRules.NormalizeModifierKey(chord.Key));
+
     var parts = new List<string>();
     int mods = chord.Modifiers;
 
@@ -38,6 +41,8 @@ public static class KeybindFormatter
 
   public static string FormatKey(int virtualKey)
   {
+    virtualKey = KeybindHoldRules.NormalizeModifierKey(virtualKey);
+
     if (KeyNames.TryGetValue(virtualKey, out string? name))
       return name;
 

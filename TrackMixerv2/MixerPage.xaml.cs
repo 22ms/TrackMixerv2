@@ -40,6 +40,8 @@ namespace TrackMixerv2
         private KeybindAction? _recordingKeybindAction;
         private TextBlock? _recordingKeybindShortcutBlock;
         private Border? _recordingKeybindCell;
+        private readonly KeybindHoldRecordingState _holdRecordingState = new();
+        private CancellationTokenSource? _holdModifierRecordingCts;
         private bool _mixerToolsInTransport;
         private bool _deleteConfirmed;
         private TextBlock? _exportButtonLabel;
@@ -80,12 +82,19 @@ namespace TrackMixerv2
         {
             KeybindApplicator.ApplyToMixerPage(this);
             KeybindRecordingCapture.PreviewKeyDown += KeybindRecordingCapture_PreviewKeyDown;
+            KeybindRecordingCapture.PreviewKeyUp += KeybindRecordingCapture_PreviewKeyUp;
             RefreshKeybindList();
         }
 
         private void KeybindRecordingCapture_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            if (TryHandleKeybindRecording(e))
+            if (TryHandleKeybindRecordingKeyDown(e))
+                e.Handled = true;
+        }
+
+        private void KeybindRecordingCapture_PreviewKeyUp(object sender, KeyRoutedEventArgs e)
+        {
+            if (TryHandleKeybindRecordingKeyUp(e))
                 e.Handled = true;
         }
         private async void Preferences_Click(object sender, RoutedEventArgs e)
@@ -271,18 +280,31 @@ namespace TrackMixerv2
                     continue;
                 }
 
-                VirtualKey boostKey = (VirtualKey)KeybindStore.Get(KeybindAction.SpeedBoost).Key;
-                VirtualKey slowKey = (VirtualKey)KeybindStore.Get(KeybindAction.SpeedSlow).Key;
-                bool boostKeyDown = IsKeyDown(boostKey);
-                bool slowKeyDown = IsKeyDown(slowKey);
+                if (KeybindRecordingGate.IsRecording)
+                {
+                    if (previousBoostKeyDown || previousSlowKeyDown)
+                    {
+                        dispatcherQueue.TryEnqueue(() => mixedMediaPlayer.ChangePlaybackSpeed(1.0));
+                        previousBoostKeyDown = false;
+                        previousSlowKeyDown = false;
+                    }
+
+                    await Task.Delay(10, cancellationToken);
+                    continue;
+                }
+
+                KeybindChord boostChord = KeybindStore.Get(KeybindAction.SpeedBoost);
+                KeybindChord slowChord = KeybindStore.Get(KeybindAction.SpeedSlow);
+                bool boostKeyDown = IsHoldChordActive(boostChord);
+                bool slowKeyDown = IsHoldChordActive(slowChord);
 
                 if (boostKeyDown != previousBoostKeyDown || slowKeyDown != previousSlowKeyDown)
                 {
                     dispatcherQueue.TryEnqueue(() =>
                     {
-                        if (IsKeyDown(boostKey))
+                        if (IsHoldChordActive(boostChord))
                             mixedMediaPlayer.ChangePlaybackSpeed(2.0);
-                        else if (IsKeyDown(slowKey))
+                        else if (IsHoldChordActive(slowChord))
                             mixedMediaPlayer.ChangePlaybackSpeed(0.25);
                         else
                             mixedMediaPlayer.ChangePlaybackSpeed(1.0);
@@ -637,6 +659,10 @@ namespace TrackMixerv2
             keyboardPollCts?.Dispose();
             keyboardPollCts = null;
 
+            _holdModifierRecordingCts?.Cancel();
+            _holdModifierRecordingCts?.Dispose();
+            _holdModifierRecordingCts = null;
+
             MixedMediaPlayer.MainMediaPlayer.MediaPlayer.MediaFailed -= MediaPlayer_MediaFailed;
             RatingSlider.UnregisterPropertyChangedCallback(RangeBase.ValueProperty, ratingValueChangedToken);
             PlaylistFilterTimeValue.ValueChanged -= PlaylistFilterTimeValue_ValueChanged;
@@ -644,7 +670,9 @@ namespace TrackMixerv2
             PlaylistFilterChrono.Click -= PlaylistFilterMode_Click;
             PlaylistFilterRating.Click -= PlaylistFilterMode_Click;
             KeybindRecordingCapture.PreviewKeyDown -= KeybindRecordingCapture_PreviewKeyDown;
+            KeybindRecordingCapture.PreviewKeyUp -= KeybindRecordingCapture_PreviewKeyUp;
             CancelKeybindRecording();
+            KeybindApplicator.RemoveMixerPage(this);
             Loaded -= MixerPage_Loaded;
             MixedMediaPlayer.Loaded -= MixedMediaPlayer_Loaded;
             MixedMediaPlayer.FullScreenToggleRequested -= MixedMediaPlayer_FullScreenToggleRequested;
@@ -752,12 +780,10 @@ namespace TrackMixerv2
                 await MainWindow.Instance.ExportActiveTabAsync();
         }
 
-        internal bool TryHandleKeybindRecording(KeyRoutedEventArgs args)
+        internal bool TryHandleKeybindRecordingKeyDown(KeyRoutedEventArgs args)
         {
             if (_recordingKeybindAction == null)
                 return false;
-
-            args.Handled = true;
 
             if (args.Key == VirtualKey.Escape)
             {
@@ -765,11 +791,96 @@ namespace TrackMixerv2
                 return true;
             }
 
-            if (KeybindChordCapture.IsModifierKey(args.Key))
+            KeybindAction action = _recordingKeybindAction.Value;
+            bool isModifierKey = KeybindChordCapture.IsModifierKey(args.Key);
+
+            if (isModifierKey)
+            {
+                if (!KeybindHoldRules.IsHoldAction(action))
+                    return true;
+
+                _holdRecordingState.OnKeyDown((int)args.Key);
+                BeginHoldModifierOnlyRecording(action, (int)args.Key);
                 return true;
+            }
+
+            _holdRecordingState.OnKeyDown((int)args.Key);
+            return TryFinalizeKeybindRecording(action, KeybindChordCapture.CreateChord(args.Key));
+        }
+
+        internal bool TryHandleKeybindRecordingKeyUp(KeyRoutedEventArgs args)
+        {
+            if (_recordingKeybindAction == null)
+                return false;
 
             KeybindAction action = _recordingKeybindAction.Value;
-            KeybindChord chord = KeybindChordCapture.CreateChord(args.Key);
+            if (!KeybindHoldRules.IsHoldAction(action))
+                return false;
+
+            KeybindChord? chord = _holdRecordingState.TryFinalizeModifierOnlyOnKeyUp((int)args.Key);
+            if (chord == null)
+                return false;
+
+            return TryFinalizeKeybindRecording(action, chord);
+        }
+
+        private void BeginHoldModifierOnlyRecording(KeybindAction action, int modifierKey)
+        {
+            _holdModifierRecordingCts?.Cancel();
+            _holdModifierRecordingCts?.Dispose();
+            _holdModifierRecordingCts = new CancellationTokenSource();
+            CancellationToken token = _holdModifierRecordingCts.Token;
+            _ = MonitorHoldModifierOnlyReleaseAsync(action, modifierKey, token);
+        }
+
+        private async Task MonitorHoldModifierOnlyReleaseAsync(
+            KeybindAction action,
+            int modifierKey,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(20, cancellationToken);
+
+                while (!cancellationToken.IsCancellationRequested
+                       && _recordingKeybindAction == action
+                       && !_holdRecordingState.NonModifierPressed
+                       && IsHoldModifierPhysicallyDown(modifierKey))
+                {
+                    await Task.Delay(10, cancellationToken);
+                }
+
+                if (cancellationToken.IsCancellationRequested
+                    || _recordingKeybindAction != action
+                    || _holdRecordingState.NonModifierPressed)
+                    return;
+
+                dispatcherQueue.TryEnqueue(() =>
+                {
+                    if (_recordingKeybindAction != action || _holdRecordingState.NonModifierPressed)
+                        return;
+
+                    if (_holdRecordingState.ModifierCandidateKey == null)
+                        return;
+
+                    TryFinalizeKeybindRecording(
+                        action,
+                        KeybindHoldRules.CreateModifierOnlyChord(_holdRecordingState.ModifierCandidateKey.Value));
+                });
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+
+        private static bool IsHoldModifierPhysicallyDown(int virtualKey) =>
+            KeybindHoldRules.IsChordActive(
+                KeybindHoldRules.CreateModifierOnlyChord(virtualKey),
+                key => IsKeyDown((VirtualKey)key),
+                () => 0);
+
+        private bool TryFinalizeKeybindRecording(KeybindAction action, KeybindChord chord)
+        {
             if (!KeybindStore.TrySet(action, chord, out string? validationError))
             {
                 CancelKeybindRecording();
@@ -782,6 +893,12 @@ namespace TrackMixerv2
             ClearKeybindRecordingState();
             return true;
         }
+
+        private static bool IsHoldChordActive(KeybindChord chord) =>
+            KeybindHoldRules.IsChordActive(
+                chord,
+                key => IsKeyDown((VirtualKey)key),
+                KeybindChordCapture.GetCurrentModifiers);
 
         private async Task ShowKeybindRebindBlockedDialogAsync(string message)
         {
@@ -835,6 +952,7 @@ namespace TrackMixerv2
                     FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
+                AutomationProperties.SetAutomationId(shortcutBlock, $"KeybindShortcut_{action}");
 
                 var shortcutBadge = new Border
                 {
@@ -910,6 +1028,8 @@ namespace TrackMixerv2
             CancelKeybindRecording();
             _recordingKeybindAction = action;
             _recordingKeybindCell = clickedCell;
+            _holdRecordingState.Reset();
+            KeybindRecordingGate.Set(true);
             _recordingKeybindShortcutBlock = GetKeybindShortcutBlock(clickedCell);
             if (_recordingKeybindShortcutBlock != null)
                 _recordingKeybindShortcutBlock.Text = "Press keys…";
@@ -939,6 +1059,7 @@ namespace TrackMixerv2
 
         private void ClearKeybindRecordingState()
         {
+            KeybindRecordingGate.Set(false);
             if (_recordingKeybindCell != null)
                 _recordingKeybindCell.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             KeybindRecordingCapture.IsHitTestVisible = false;
@@ -946,6 +1067,10 @@ namespace TrackMixerv2
             _recordingKeybindAction = null;
             _recordingKeybindShortcutBlock = null;
             _recordingKeybindCell = null;
+            _holdRecordingState.Reset();
+            _holdModifierRecordingCts?.Cancel();
+            _holdModifierRecordingCts?.Dispose();
+            _holdModifierRecordingCts = null;
         }
         static bool IsKeyDown(VirtualKey key)
         {

@@ -177,7 +177,9 @@ public static class KeybindStore
       foreach (var pair in parsed)
       {
         if (Enum.TryParse<KeybindAction>(pair.Key, out var action) && pair.Value != null)
-          loaded[action] = pair.Value;
+          loaded[action] = KeybindHoldRules.IsHoldAction(action)
+              ? KeybindHoldRules.SanitizeHoldChord(pair.Value)
+              : pair.Value;
       }
     }
     catch

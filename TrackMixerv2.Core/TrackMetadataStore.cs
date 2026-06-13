@@ -4,6 +4,8 @@ namespace TrackMixerv2;
 
 public static class TrackMetadataStore
 {
+    private static readonly SemaphoreSlim PersistGate = new(1, 1);
+
     public static void UpdateEntry(Dictionary<string, TrackMetadata> metadata, string path, double rating, List<double> sliders)
     {
         lock (AppState.TrackMetadataLock)
@@ -34,12 +36,22 @@ public static class TrackMetadataStore
 
     public static async Task PersistAsync(Dictionary<string, TrackMetadata> metadata, string jsonPath)
     {
-        string metadataJson;
-        lock (AppState.TrackMetadataLock)
+        // Serialize writes so overlapping callers (e.g. rapid volume-slider drags) never collide
+        // on the same file, which would otherwise throw a sharing violation and crash the UI.
+        await PersistGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            metadataJson = JsonConvert.SerializeObject(metadata);
+            string metadataJson;
+            lock (AppState.TrackMetadataLock)
+            {
+                metadataJson = JsonConvert.SerializeObject(metadata);
+            }
+            await File.WriteAllTextAsync(jsonPath, metadataJson).ConfigureAwait(false);
         }
-        await File.WriteAllTextAsync(jsonPath, metadataJson);
+        finally
+        {
+            PersistGate.Release();
+        }
     }
 
     public static Dictionary<string, TrackMetadata> Load(string jsonPath)

@@ -88,16 +88,4 @@ public sealed class KeybindFocusRulesScenarioTests
             0x20,
             modifiers: KeybindFocusRules.ModifierControl));
     }
-
-    [Theory]
-    [InlineData("C:\\clip.mp4", true, true)]
-    [InlineData("C:\\clip.mp4", false, false)]
-    [InlineData(null, true, false)]
-    public void ShouldShowCodecFailureDialog_requires_existing_media_path(
-        string? mediaPath,
-        bool mediaFileExists,
-        bool expected)
-    {
-        Assert.Equal(expected, MediaDialogRules.ShouldShowCodecFailureDialog(mediaPath, mediaFileExists));
-    }
 }

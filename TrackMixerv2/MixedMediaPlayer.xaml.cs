@@ -859,7 +859,7 @@ namespace TrackMixerv2
             {
                 return;
             }
-            if ((e.OriginalSource as Grid).Name != "RootGrid") return;
+            if ((e.OriginalSource as Grid)?.Name != "RootGrid") return;
             ChangePlaybackSpeed(2.0);
         }
 

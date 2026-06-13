@@ -127,9 +127,15 @@ namespace TrackMixerv2
             {
                 if (obj is TabViewItem tabViewItem)
                 {
-                    tabViewItem.IsEnabledChanged += (object sender, DependencyPropertyChangedEventArgs e) => { SaveRecentVideos(); } ;
+                    tabViewItem.IsEnabledChanged -= TabViewItem_IsEnabledChanged;
+                    tabViewItem.IsEnabledChanged += TabViewItem_IsEnabledChanged;
                 }
             }
+            SaveRecentVideos();
+        }
+
+        private void TabViewItem_IsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
             SaveRecentVideos();
         }
 
@@ -206,15 +212,6 @@ namespace TrackMixerv2
         {
             if (IsPlayerFullScreen && _fullScreenPlayer == player)
                 ExitPlayerFullScreen();
-        }
-
-        private void ExitPlayerFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-        {
-            if (!IsPlayerFullScreen)
-                return;
-
-            ExitPlayerFullScreen();
-            args.Handled = true;
         }
 
         private void TabView_LayoutUpdated(object sender, object e)
@@ -485,32 +482,6 @@ namespace TrackMixerv2
         private void TabView_TabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
         {
             CloseTab(args.Tab as TabViewItem);
-        }
-
-        private void NewTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-        {
-            TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
-            args.Handled = true;
-        }
-
-        private void CloseTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-        {
-            CloseTab(TabView.SelectedItem as TabViewItem);
-            args.Handled = true;
-        }
-
-        private void NextTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-        {
-            if (TabView.TabItems.Count > TabView.SelectedIndex + 1)
-                TabView.SelectedItem = TabView.TabItems[TabView.SelectedIndex + 1];
-            args.Handled = true;
-        }
-
-        private void PreviousTabInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-        {
-            if (TabView.SelectedIndex - 1 >= 0)
-                TabView.SelectedItem = TabView.TabItems[TabView.SelectedIndex - 1];
-            args.Handled = true;
         }
 
         private void MixedMediaPlayer_DragOver(object sender, DragEventArgs e)
