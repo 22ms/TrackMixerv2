@@ -71,6 +71,28 @@ internal static class TrackMixerPaths
         return (clipA, clipB, root);
     }
 
+    public static (string[] Clips, string Root) CreateChronoClipLibrary(
+        IReadOnlyList<string> relativeNames,
+        string clipName = MultiTrackFixtureName)
+    {
+        if (relativeNames.Count == 0)
+            throw new ArgumentException("At least one clip name is required.", nameof(relativeNames));
+
+        string root = CreateTempLibraryRoot();
+        string fixture = ResolveFixtureClipPath(clipName);
+        var clips = new string[relativeNames.Count];
+        DateTime baseTime = DateTime.Now.AddHours(-relativeNames.Count);
+
+        for (int i = 0; i < relativeNames.Count; i++)
+        {
+            clips[i] = Path.Combine(root, relativeNames[i]);
+            File.Copy(fixture, clips[i], overwrite: true);
+            File.SetCreationTime(clips[i], baseTime.AddMinutes(i));
+        }
+
+        return (clips, root);
+    }
+
     public static (string MultiTrackClip, string SingleTrackClip, string Root) CreateMixedTrackCountLibrary()
     {
         string multiTrackClip = CreateTempClipLibrary();

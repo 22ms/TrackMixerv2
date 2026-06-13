@@ -67,6 +67,7 @@ namespace TrackMixerv2
             if (sender.CurrentState == MediaPlayerState.Playing)
             {
                 SyncTrackPlayersToMain(force: true);
+                StartAuxiliaryTracks();
                 StartSyncTimer();
             }
             else if (sender.CurrentState == MediaPlayerState.Paused)
@@ -77,13 +78,11 @@ namespace TrackMixerv2
 
         private void MediaPlayer_MediaPlayerRateChanged(MediaPlayer sender, MediaPlayerRateChangedEventArgs args)
         {
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                trackPlayer.PlaybackRate = sender.PlaybackRate;
-            }
+            double rate = sender.PlaybackRate;
+            ForEachAuxiliaryTrack(trackPlayer => trackPlayer.PlaybackRate = rate);
 
             dispatcherQueue.TryEnqueue(() =>
-                customMixedMediaPlayerControl?.SetPlaybackRateSelection(sender.PlaybackRate));
+                customMixedMediaPlayerControl?.SetPlaybackRateSelection(rate));
         }
 
         private void MixedMediaPlayer_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -186,17 +185,20 @@ namespace TrackMixerv2
         {
             if (currentVideo == null) return;
             MainMediaPlayer.MediaPlayer.PlaybackRate = rate;
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                trackPlayer.PlaybackRate = rate;
-            }
+            ForEachAuxiliaryTrack(trackPlayer => trackPlayer.PlaybackRate = rate);
 
             customMixedMediaPlayerControl?.SetPlaybackRateSelection(rate);
         }
 
-        private async Task showUnsupportedCodecDialog()
+        private async Task ShowUnsupportedCodecDialogAsync(int mediaGeneration)
         {
             if (UiTestBootstrap.IsEnabled)
+                return;
+
+            if (!MediaDialogRules.ShouldShowForOpenGeneration(mediaGeneration, _openMediaGeneration, _isDisposing))
+                return;
+
+            if (!MediaDialogRules.ShouldShowCodecFailureDialog(currentVideo, File.Exists(currentVideo)))
                 return;
 
             ContentDialog unsupportedCodecDialog = new ContentDialog()
@@ -206,13 +208,25 @@ namespace TrackMixerv2
                 Content = "Download the appropiate Audio/video Extension (e.g. AV1, HEVC, VP9, Web Media Extensions) from the Microsoft Store or check the Discord for support.",
                 CloseButtonText = "Dismiss"
             };
-            await unsupportedCodecDialog.ShowAsync();
+
+            await ContentDialogPresenter.TryShowAsync(unsupportedCodecDialog);
+        }
+
+        private void RequestUnsupportedCodecDialog(int mediaGeneration)
+        {
+            if (UiTestBootstrap.IsEnabled)
+                return;
+
+            dispatcherQueue.TryEnqueue(() => _ = ShowUnsupportedCodecDialogAsync(mediaGeneration));
         }
 
         public async void OpenMediaAsync(string filePath)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                await TryAdvancePastUnavailableMediaAsync(filePath);
                 return;
+            }
 
             int generation = ++_openMediaGeneration;
             Dispose();
@@ -229,6 +243,7 @@ namespace TrackMixerv2
             catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
             {
                 Trace.WriteLine($"OpenMediaAsync failed for '{filePath}': {ex.Message}");
+                await TryAdvancePastUnavailableMediaAsync(filePath);
                 return;
             }
             MediaSource source = MediaSource.CreateFromStorageFile(file);
@@ -249,12 +264,7 @@ namespace TrackMixerv2
                     loadedMedia.AudioTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported;
 
                 if (isVideoUnsupported || isAudioUnsupported)
-                {
-                    dispatcherQueue.TryEnqueue(async () =>
-                    {
-                        await showUnsupportedCodecDialog();
-                    });
-                }
+                    RequestUnsupportedCodecDialog(generation);
 
                 if (loadedMedia.AudioTracks.Count > 0)
                 {
@@ -285,7 +295,13 @@ namespace TrackMixerv2
 
                             (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
                             TrackPlayers.Add(trackPlayer);
-                            AlignTrackPlayerToMain(trackPlayer);
+                            dispatcherQueue.TryEnqueue(() =>
+                            {
+                                if (generation != _openMediaGeneration)
+                                    return;
+
+                                AlignTrackPlayerToMain(trackPlayer);
+                            });
                             MediaOpened[currentIndex - 1] = true;
                             if (MediaOpened.All(x => x))
                             {
@@ -295,9 +311,10 @@ namespace TrackMixerv2
                                         return;
 
                                     SyncTrackPlayersToMain(force: true);
+                                    StartAuxiliaryTracks();
                                     List<MediaPlayer> list = new List<MediaPlayer>();
                                     list.Add(MainMediaPlayer.MediaPlayer);
-                                    list.AddRange(TrackPlayers);
+                                    list.AddRange(GetAuxiliaryTrackSnapshot());
                                     MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
                                 });
                             }
@@ -322,10 +339,10 @@ namespace TrackMixerv2
 
             MediaFailedHandler = (sender, args) =>
             {
-                dispatcherQueue.TryEnqueue(async () =>
-                {
-                    await showUnsupportedCodecDialog();
-                });
+                if (!MediaDialogRules.ShouldShowCodecFailureDialog(currentVideo, File.Exists(currentVideo)))
+                    return;
+
+                RequestUnsupportedCodecDialog(generation);
             };
             MainMediaPlayer.MediaPlayer.MediaFailed += MediaFailedHandler;
 
@@ -407,11 +424,7 @@ namespace TrackMixerv2
         {
             SyncTrackPlayersToMain(force: true);
             MainMediaPlayer.MediaPlayer.Play();
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                trackPlayer.Play();
-            }
-
+            StartAuxiliaryTracks();
             StartSyncTimer();
         }
 
@@ -419,10 +432,7 @@ namespace TrackMixerv2
         {
             StopSyncTimer();
             MainMediaPlayer.MediaPlayer.Pause();
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                trackPlayer.Pause();
-            }
+            ForEachAuxiliaryTrack(trackPlayer => trackPlayer.Pause());
         }
 
         public void SetFullScreenButtonState(bool isFullScreen)
@@ -659,7 +669,7 @@ namespace TrackMixerv2
                 return;
             }
 
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
+            foreach (MediaPlayer trackPlayer in GetAuxiliaryTrackSnapshot())
             {
                 try
                 {
@@ -675,6 +685,68 @@ namespace TrackMixerv2
                 {
                 }
             }
+        }
+
+        private IReadOnlyList<MediaPlayer> GetAuxiliaryTrackSnapshot() => TrackPlayers.ToList();
+
+        private void ForEachAuxiliaryTrack(Action<MediaPlayer> action)
+        {
+            foreach (MediaPlayer trackPlayer in GetAuxiliaryTrackSnapshot())
+                action(trackPlayer);
+        }
+
+        private void StartAuxiliaryTracks()
+        {
+            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+                return;
+
+            MediaPlayerState mainState;
+            try
+            {
+                mainState = mainPlayer.CurrentState;
+            }
+            catch (COMException)
+            {
+                return;
+            }
+
+            if (mainState != MediaPlayerState.Playing)
+                return;
+
+            ForEachAuxiliaryTrack(trackPlayer =>
+            {
+                try
+                {
+                    if (trackPlayer.CurrentState != MediaPlayerState.Playing)
+                        trackPlayer.Play();
+                }
+                catch (COMException)
+                {
+                }
+            });
+        }
+
+        private async Task TryAdvancePastUnavailableMediaAsync(string? unavailablePath)
+        {
+            string? anchorPath = string.IsNullOrWhiteSpace(unavailablePath) ? currentVideo : unavailablePath;
+            ++_openMediaGeneration;
+            Dispose();
+            _isDisposing = false;
+            currentVideo = null;
+
+            if (string.IsNullOrWhiteSpace(anchorPath))
+                return;
+
+            string? nextVideo = await GetTrack(PlaylistConfig, anchorPath, Direction.Next);
+            if (nextVideo != null && !string.Equals(nextVideo, anchorPath, StringComparison.OrdinalIgnoreCase))
+            {
+                dispatcherQueue.TryEnqueue(() => OpenMediaAsync(nextVideo));
+                return;
+            }
+
+            string? previousVideo = await GetTrack(PlaylistConfig, anchorPath, Direction.Previous);
+            if (previousVideo != null && !string.Equals(previousVideo, anchorPath, StringComparison.OrdinalIgnoreCase))
+                dispatcherQueue.TryEnqueue(() => OpenMediaAsync(previousVideo));
         }
 
         private bool TryGetMainMediaPlayer(out MediaPlayer? mediaPlayer)
@@ -737,18 +809,12 @@ namespace TrackMixerv2
         public void FastForward(int timeMillis)
         {
             OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, timeMillis);
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                OffsetMediaPlayerPlaybackPosition(trackPlayer, timeMillis);
-            }
+            ForEachAuxiliaryTrack(trackPlayer => OffsetMediaPlayerPlaybackPosition(trackPlayer, timeMillis));
         }
         public void Rewind(int timeMillis)
         {
             OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, -timeMillis);
-            foreach (MediaPlayer trackPlayer in TrackPlayers)
-            {
-                OffsetMediaPlayerPlaybackPosition(trackPlayer, -timeMillis);
-            }
+            ForEachAuxiliaryTrack(trackPlayer => OffsetMediaPlayerPlaybackPosition(trackPlayer, -timeMillis));
         }
 
         public void Dispose()

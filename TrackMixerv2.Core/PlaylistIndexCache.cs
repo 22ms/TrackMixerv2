@@ -58,6 +58,19 @@ public static class PlaylistIndexCache
         }
     }
 
+    public static void NotifyMediaDeleted(string filePath, bool subfolderOnly)
+    {
+        string? rootFolder = subfolderOnly
+            ? Path.GetDirectoryName(filePath)
+            : AppState.RootFoldersContainFile(filePath);
+
+        if (rootFolder != null)
+            InvalidateChrono(rootFolder);
+
+        InvalidateRating();
+        FileTimeCache.Remove(filePath);
+    }
+
     public static PlaylistIndex GetChrono(string rootFolder)
     {
         string key = ChronoKey(rootFolder);
@@ -88,6 +101,12 @@ public static class PlaylistIndexCache
 
     public static PlaylistIndex GetChronoOrRebuild(string rootFolder, string currentFile)
     {
+        if (!string.IsNullOrWhiteSpace(currentFile) && !File.Exists(currentFile))
+        {
+            InvalidateChrono(rootFolder);
+            return GetChrono(rootFolder);
+        }
+
         PlaylistIndex index = GetChrono(rootFolder);
         if (index.TryGetIndex(currentFile, out _))
             return index;
@@ -111,6 +130,7 @@ public static class PlaylistIndexCache
     {
         var ordered = Directory.EnumerateFiles(rootFolder, "*.*", SearchOption.AllDirectories)
             .Where(Helper.IsSupportedVideoPath)
+            .Where(File.Exists)
             .Select(path => (path, created: FileTimeCache.GetCreationTime(path)))
             .OrderBy(entry => entry.created)
             .ThenBy(entry => entry.path, StringComparer.OrdinalIgnoreCase)
@@ -129,6 +149,9 @@ public static class PlaylistIndexCache
             foreach (KeyValuePair<string, TrackMetadata> pair in AppState.TRACK_METADATA)
             {
                 if (!Helper.PathIsUnderDirectory(pair.Key, rootFolder))
+                    continue;
+
+                if (!File.Exists(pair.Key))
                     continue;
 
                 if (FileTimeCache.GetCreationTime(pair.Key) <= afterThis)

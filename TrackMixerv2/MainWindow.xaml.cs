@@ -367,6 +367,8 @@ namespace TrackMixerv2
             return newTab;
         }
 
+        internal void CloseTabItem(TabViewItem tab) => CloseTab(tab);
+
         private void CloseTab(TabViewItem tab)
         {
             if (tab == null)

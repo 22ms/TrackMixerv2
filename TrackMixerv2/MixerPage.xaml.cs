@@ -41,6 +41,7 @@ namespace TrackMixerv2
         private TextBlock? _recordingKeybindShortcutBlock;
         private Border? _recordingKeybindCell;
         private bool _mixerToolsInTransport;
+        private bool _deleteConfirmed;
         private TextBlock? _exportButtonLabel;
         private TextBlock? _deleteButtonLabel;
         private Thickness _exportButtonPadding;
@@ -297,33 +298,52 @@ namespace TrackMixerv2
             {
             }
         }
-        private void DeleteVideoConfirmation_Click(object sender, RoutedEventArgs e)
+        private async void DeleteVideoConfirmation_Click(object sender, RoutedEventArgs e)
         {
-            switch (MixedMediaPlayer.AutoplayMode)
-            {
-                case AutoplayMode.Off:
-                    MixedMediaPlayer.PlayNextTrack();
-                    break;
-                case AutoplayMode.Forward:
-                    MixedMediaPlayer.PlayNextTrack();
-                    break;
-                case AutoplayMode.Backward:
-                    MixedMediaPlayer.PlayPreviousTrack();
-                    break;
-            }
+            _deleteConfirmed = true;
+            DeleteConfirmationFlyout.Hide();
+
+            string deletedPath = path;
+            if (string.IsNullOrWhiteSpace(deletedPath))
+                return;
+
+            MixedMediaPlayer.PauseAll();
+
+            var config = MixedMediaPlayer.PlaylistConfig;
+            Direction primary = MixedMediaPlayer.AutoplayMode == AutoplayMode.Backward
+                ? Direction.Previous
+                : Direction.Next;
+            Direction fallback = primary == Direction.Next ? Direction.Previous : Direction.Next;
+
+            string? targetPath = await GetTrack(config, deletedPath, primary);
+            if (targetPath == null)
+                targetPath = await GetTrack(config, deletedPath, fallback);
+
             try
             {
-                FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                if (File.Exists(deletedPath))
+                    FileSystem.DeleteFile(deletedPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
             }
-            MixedMediaPlayer.PlayAll();
-            DeleteConfirmationFlyout.Hide();
+
+            PlaylistIndexCache.NotifyMediaDeleted(deletedPath, config.SubfolderOnly);
+            TrackMetadataStore.RemoveEntry(AppState.TRACK_METADATA, deletedPath);
+            await TrackMetadataStore.PersistAsync(AppState.TRACK_METADATA, AppState.TrackMetadataJson);
+
+            if (!string.IsNullOrWhiteSpace(targetPath) && File.Exists(targetPath))
+                OpenNewMedia(targetPath);
         }
         private void DeleteConfirmationFlyout_Closed(object sender, object e)
         {
+            if (_deleteConfirmed)
+            {
+                _deleteConfirmed = false;
+                return;
+            }
+
             MixedMediaPlayer.PlayAll();
             DeleteConfirmationFlyout.Hide();
         }
@@ -773,7 +793,7 @@ namespace TrackMixerv2
                 XamlRoot = PageRootGrid.XamlRoot,
             };
 
-            await dialog.ShowAsync();
+            await ContentDialogPresenter.TryShowAsync(dialog);
         }
 
         private void RefreshKeybindList()

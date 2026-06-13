@@ -23,6 +23,15 @@ public static class TrackMetadataStore
         FileTimeCache.Remove(path);
     }
 
+    public static void RemoveEntry(Dictionary<string, TrackMetadata> metadata, string path)
+    {
+        lock (AppState.TrackMetadataLock)
+            metadata.Remove(path);
+
+        PlaylistIndexCache.InvalidateRating();
+        FileTimeCache.Remove(path);
+    }
+
     public static async Task PersistAsync(Dictionary<string, TrackMetadata> metadata, string jsonPath)
     {
         string metadataJson;

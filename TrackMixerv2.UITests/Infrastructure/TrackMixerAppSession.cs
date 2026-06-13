@@ -146,6 +146,23 @@ public sealed class TrackMixerAppSession : IDisposable
         nextTrack.Invoke();
     }
 
+    public void ConfirmDeleteCurrentVideo()
+    {
+        var deleteButton = FindByAutomationId("DeleteVideoButton")?.AsButton()
+            ?? throw new InvalidOperationException("Delete video button was not found.");
+        deleteButton.Invoke();
+
+        var confirmButton = UiWait.Until(
+            () => FindByAutomationId("DeleteVideoConfirmButton")?.AsButton()
+                ?? FindConfirmDeleteYesButton(),
+            TimeSpan.FromSeconds(10),
+            "delete confirmation Yes button");
+
+        confirmButton.Invoke();
+    }
+
+    public bool MixerPageIsLoaded() => FindByAutomationId("RatingSlider") != null;
+
     public int GetVolumeSliderCount()
     {
         int count = 0;
@@ -245,6 +262,23 @@ public sealed class TrackMixerAppSession : IDisposable
         var desktop = Automation.GetDesktop();
         var element = desktop.FindFirstDescendant(Automation.ConditionFactory.ByName(windowName));
         return element?.AsWindow();
+    }
+
+    private Button? FindConfirmDeleteYesButton()
+    {
+        foreach (AutomationElement element in Automation.GetDesktop().FindAllDescendants(
+                     Automation.ConditionFactory.ByName("Yes")))
+        {
+            try
+            {
+                return element.AsButton();
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
     }
 
     private void DismissBlockingDialogs()

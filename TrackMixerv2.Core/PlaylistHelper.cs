@@ -136,18 +136,28 @@ public class PlaylistHelper
         if (!playlist.TryGetIndex(currentFile, out int currentIndex))
             currentIndex = -1;
 
-        if (direction == Direction.Next)
+        if (playlistConfig.PlaylistMode == PlaylistMode.Chrono &&
+            direction == Direction.Next &&
+            (currentIndex == -1 || currentIndex == playlist.OrderedPaths.Count - 1))
         {
-            if (currentIndex == -1 || currentIndex == playlist.OrderedPaths.Count - 1)
-                return null;
-
-            return playlist.OrderedPaths[currentIndex + 1];
+            PlaylistIndexCache.InvalidateChrono(rootFolder);
+            playlist = PlaylistIndexCache.GetChrono(rootFolder);
+            if (!playlist.TryGetIndex(currentFile, out currentIndex))
+                currentIndex = -1;
         }
 
-        if (currentIndex == -1 || currentIndex == 0)
+        if (direction == Direction.Next)
+        {
+            if (currentIndex >= playlist.OrderedPaths.Count - 1)
+                return null;
+
+            return PlaylistNavigation.FindExistingPathForward(playlist, currentIndex + 1);
+        }
+
+        if (currentIndex <= 0)
             return null;
 
-        return playlist.OrderedPaths[currentIndex - 1];
+        return PlaylistNavigation.FindExistingPathBackward(playlist, currentIndex - 1);
     }
 
     public static TimeSpan TimeSpanFromUnitValue(TimeUnit unit, double value)

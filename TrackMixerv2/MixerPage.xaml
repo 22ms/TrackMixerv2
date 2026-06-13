@@ -254,7 +254,7 @@
                                             <StackPanel>
                                                 <TextBlock Text="Are you sure you want to delete this video? (Recycle bin)" Margin="5" />
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="5">
-                                                    <Button Content="Yes" Click="DeleteVideoConfirmation_Click" Style="{StaticResource DestructiveButtonStyle}" Margin="5,0" />
+                                                    <Button Content="Yes" Click="DeleteVideoConfirmation_Click" Style="{StaticResource DestructiveButtonStyle}" Margin="5,0" AutomationProperties.AutomationId="DeleteVideoConfirmButton" />
                                                     <Button Content="No" Click="CancelDelete_Click" Margin="5,0" />
                                                 </StackPanel>
                                             </StackPanel>
