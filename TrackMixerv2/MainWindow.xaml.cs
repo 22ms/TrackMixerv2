@@ -14,7 +14,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.DataTransfer;
-using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.UI;
@@ -57,12 +56,15 @@ namespace TrackMixerv2
             launchFiles = files;
 
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-            AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+            ExtendsContentIntoTitleBar = true;
             AppWindow.TitleBar.ButtonBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             this.Closed += MainWindow_Closed;
 
-            CustomDragRegion.Loaded += CustomDragRegion_Loaded;
+            CustomDragRegion.Loaded += TitleBarDragRegion_Loaded;
+            CustomDragRegion.LayoutUpdated += TitleBarDragRegion_LayoutUpdated;
+            EmptyStateDragRegion.Loaded += TitleBarDragRegion_Loaded;
+            EmptyStateDragRegion.LayoutUpdated += TitleBarDragRegion_LayoutUpdated;
             SizeChanged += MainWindow_SizeChanged;
             TabView.LayoutUpdated += TabView_LayoutUpdated;
             TabView.AddTabButtonClick += TabView_AddTabButtonClick;
@@ -72,7 +74,7 @@ namespace TrackMixerv2
             IntPtr windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
             Microsoft.UI.WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
             var appWindow = AppWindow.GetFromWindowId(windowId);
-            appWindow.SetIcon(GetAssetPath("Assets", "video.ico"));
+            appWindow.SetIcon(GetAssetPath("Assets", "trackmixerv2.ico"));
 
             this.Activated += (sender, args) =>
             {
@@ -142,6 +144,7 @@ namespace TrackMixerv2
                 }
             }
             SaveRecentVideos();
+            UpdateEmptyStateVisibility();
         }
 
         private void TabViewItem_IsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -152,7 +155,10 @@ namespace TrackMixerv2
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
             ExitPlayerFullScreen();
-            CustomDragRegion.Loaded -= CustomDragRegion_Loaded;
+            CustomDragRegion.Loaded -= TitleBarDragRegion_Loaded;
+            CustomDragRegion.LayoutUpdated -= TitleBarDragRegion_LayoutUpdated;
+            EmptyStateDragRegion.Loaded -= TitleBarDragRegion_Loaded;
+            EmptyStateDragRegion.LayoutUpdated -= TitleBarDragRegion_LayoutUpdated;
             SizeChanged -= MainWindow_SizeChanged;
             TabView.LayoutUpdated -= TabView_LayoutUpdated;
             TabView.AddTabButtonClick -= TabView_AddTabButtonClick;
@@ -185,6 +191,7 @@ namespace TrackMixerv2
             _fullScreenMixerPage?.SetFullscreenTransportToolsVisible(true);
             AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
             IsPlayerFullScreen = true;
+            UpdateEmptyStateVisibility();
         }
 
         public void ExitPlayerFullScreen()
@@ -205,6 +212,7 @@ namespace TrackMixerv2
             _fullScreenPlayer = null;
             _fullScreenPlayerHost = null;
             _fullScreenMixerPage = null;
+            UpdateEmptyStateVisibility();
         }
 
         private MixerPage FindMixerPageForPlayer(MixedMediaPlayer player)
@@ -226,31 +234,70 @@ namespace TrackMixerv2
 
         private void TabView_LayoutUpdated(object sender, object e)
         {
-            SetTitleBarDragRegion();
+            ApplyTitleBar();
             if (TabView.SelectedItem == null) return;
             Title = (TabView.SelectedItem as TabViewItem).Header.ToString();
         }
 
-        private void CustomDragRegion_Loaded(object sender, RoutedEventArgs e)
-        {
-            SetTitleBarDragRegion();
-        }
+        private void TitleBarDragRegion_Loaded(object sender, RoutedEventArgs e) =>
+            ApplyTitleBar();
+
+        private void TitleBarDragRegion_LayoutUpdated(object sender, object e) =>
+            ApplyTitleBar();
 
         private async void MainWindow_SizeChanged(object sender, WindowSizeChangedEventArgs args)
         {
             await Task.Delay(50); // dont know why. it just so happens to work so why change it?
-            SetTitleBarDragRegion();
+            ApplyTitleBar();
         }
 
-        private void SetTitleBarDragRegion()
+        private bool _applyingTitleBar;
+        private double _lastCaptionPadding = double.NaN;
+
+        private void ApplyTitleBar()
         {
-            if (TabView == null || CustomDragRegion == null || AppWindow == null) return;
-            int x = (int)(TabView.ActualWidth - CustomDragRegion.ActualWidth);
-            RectInt32[] dragRects = new RectInt32[]
+            if (_applyingTitleBar || !ExtendsContentIntoTitleBar || AppWindow == null)
+                return;
+
+            bool useEmptyStateChrome = EmptyStateShell?.Visibility == Visibility.Visible;
+            XamlRoot? xamlRoot = useEmptyStateChrome ? EmptyStateShell?.XamlRoot : TabView?.XamlRoot;
+            if (xamlRoot == null)
+                return;
+
+            _applyingTitleBar = true;
+            try
             {
-                new RectInt32(x, 0, (int)CustomDragRegion.ActualWidth, (int)CustomDragRegion.ActualHeight)
-            };
-            AppWindow.TitleBar.SetDragRectangles(dragRects);
+                double scale = xamlRoot.RasterizationScale;
+                if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
+                    scale = 1.0;
+
+                int rightInset = AppWindow.TitleBar.RightInset;
+                if (rightInset < 0)
+                    return;
+
+                double captionPadding = rightInset / scale;
+                if (double.IsNaN(captionPadding) || double.IsInfinity(captionPadding) || captionPadding < 0)
+                    return;
+
+                if (Math.Abs(captionPadding - _lastCaptionPadding) > 0.5)
+                {
+                    _lastCaptionPadding = captionPadding;
+                    GridLength padding = new GridLength(captionPadding);
+
+                    if (useEmptyStateChrome)
+                        EmptyStateCaptionButtonsPaddingColumn.Width = padding;
+                    else
+                        CaptionButtonsPaddingColumn.Width = padding;
+                }
+
+                UIElement? dragRegion = useEmptyStateChrome ? EmptyStateDragRegion : CustomDragRegion;
+                if (dragRegion != null)
+                    SetTitleBar(dragRegion);
+            }
+            finally
+            {
+                _applyingTitleBar = false;
+            }
         }
 
         private async void TabView_Loaded(object sender, RoutedEventArgs e)
@@ -294,13 +341,10 @@ namespace TrackMixerv2
                 hasRecentVideos = recentVideos.Count > 0;
             }
 
-            if (UiTestBootstrap.IsEnabled && !hasRecentVideos)
-                return;
-
             if (hasRecentVideos)
                 AddNewTabs([.. recentVideos]);
-            else
-                TabView_AddTabButtonClick(TabView, new RoutedEventArgs());
+
+            UpdateEmptyStateVisibility();
         }
         public void SaveRecentVideos()
         {
@@ -384,6 +428,43 @@ namespace TrackMixerv2
                 page.Dispose();
             }
             TabView.TabItems.Remove(tab);
+            UpdateEmptyStateVisibility();
+        }
+
+        private void UpdateEmptyStateVisibility()
+        {
+            if (EmptyStateShell == null || TabView == null)
+                return;
+
+            bool show = TabView.TabItems.Count == 0 && !IsPlayerFullScreen;
+            EmptyStateShell.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            TabView.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+
+            if (!show)
+                SetEmptyStateDropHighlight(false);
+
+            dispatcherQueue.TryEnqueue(ApplyTitleBar);
+        }
+
+        private void SetEmptyStateDropHighlight(bool visible)
+        {
+            if (EmptyStateDropHighlight == null)
+                return;
+
+            EmptyStateDropHighlight.Opacity = visible ? 1 : 0;
+        }
+
+        private async void EmptyStateOpenButton_Click(object sender, RoutedEventArgs e) =>
+            await OpenVideosFromDialogAsync();
+
+        private async Task OpenVideosFromDialogAsync()
+        {
+            IReadOnlyList<StorageFile> files = await OpenFilesDialog();
+            if (files.Count <= 0)
+                return;
+
+            List<string> filePaths = files.Select(file => file.Path).ToList();
+            AddNewTabs(filePaths.ToArray());
         }
 
         async Task<IReadOnlyList<StorageFile>> OpenFilesDialog()
@@ -472,14 +553,8 @@ namespace TrackMixerv2
             DisableTabStops(TabView);
         }
 
-        private async void TabView_AddTabButtonClick(TabView sender, object args)
-        {
-            IReadOnlyList<StorageFile> files = await OpenFilesDialog();
-            if (files.Count <= 0) return;
-
-            List<string> filePaths = files.Select(file => file.Path).ToList();
-            AddNewTabs(filePaths.ToArray());
-        }
+        private async void TabView_AddTabButtonClick(TabView sender, object args) =>
+            await OpenVideosFromDialogAsync();
 
         private void TabView_TabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
         {
@@ -489,9 +564,7 @@ namespace TrackMixerv2
         private void MixedMediaPlayer_DragOver(object sender, DragEventArgs e)
         {
             if (e.DataView.Contains(StandardDataFormats.StorageItems))
-            {
                 e.AcceptedOperation = DataPackageOperation.Copy;
-            }
             e.Handled = true;
         }
 
@@ -499,29 +572,56 @@ namespace TrackMixerv2
         {
             dispatcherQueue.TryEnqueue(async () =>
             {
-                if (e.DataView.Contains(StandardDataFormats.StorageItems))
-                {
-                    var items = await e.DataView.GetStorageItemsAsync();
-                    if (items == null || items.Count == 0)
-                    {
-                        e.Handled = true;
-                        return;
-                    }
-                    List<string> videoFilePaths = items.OfType<StorageFile>()
-                                    .Where(file => VideoFileHelper.IsVideoFile(file))
-                                    .Select(file => file.Path)
-                                    .ToList();
-
-                    if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.DragAndDropOnNewTab))
-                    {
-                        AddNewTabs(videoFilePaths.ToArray(), LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab));
-                    }
-                    else
-                    {
-                        AddNewTabs(videoFilePaths.ToArray());
-                    }
-                }
+                await HandleVideoFilesDropAsync(e.DataView);
+                e.Handled = true;
             });
+        }
+
+        private void EmptyState_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                e.AcceptedOperation = DataPackageOperation.Copy;
+                SetEmptyStateDropHighlight(true);
+            }
+            e.Handled = true;
+        }
+
+        private void EmptyState_DragLeave(object sender, DragEventArgs e) =>
+            SetEmptyStateDropHighlight(false);
+
+        private void EmptyState_Drop(object sender, DragEventArgs e)
+        {
+            SetEmptyStateDropHighlight(false);
+            dispatcherQueue.TryEnqueue(async () =>
+            {
+                await HandleVideoFilesDropAsync(e.DataView);
+                e.Handled = true;
+            });
+        }
+
+        private async Task HandleVideoFilesDropAsync(DataPackageView dataView)
+        {
+            if (!dataView.Contains(StandardDataFormats.StorageItems))
+                return;
+
+            var items = await dataView.GetStorageItemsAsync();
+            if (items == null || items.Count == 0)
+                return;
+
+            List<string> videoFilePaths = items.OfType<StorageFile>()
+                .Where(file => VideoFileHelper.IsVideoFile(file))
+                .Select(file => file.Path)
+                .ToList();
+
+            if (videoFilePaths.Count == 0)
+                return;
+
+            bool onNewTab = LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.DragAndDropOnNewTab)
+                ? LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab)
+                : true;
+
+            AddNewTabs(videoFilePaths.ToArray(), onNewTab);
         }
         private async void MenuFlyoutItem_Click(object sender, RoutedEventArgs e)
         {

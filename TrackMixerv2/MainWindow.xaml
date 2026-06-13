@@ -28,10 +28,99 @@
             <Grid x:Name="ShellTitlebarInset"/>
         </TabView.TabStripHeader>
         <TabView.TabStripFooter>
-            <Grid Background="Transparent" x:Name="CustomDragRegion" MinWidth="188"/>
+            <Grid Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition x:Name="CaptionButtonsPaddingColumn" Width="0"/>
+                </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0"
+                      Background="Transparent"
+                      x:Name="CustomDragRegion"
+                      MinWidth="188"
+                      HorizontalAlignment="Stretch"/>
+            </Grid>
         </TabView.TabStripFooter>
 
         </TabView>
+
+        <Grid x:Name="EmptyStateShell"
+              Visibility="Collapsed"
+              Background="{ThemeResource LayerFillColorDefault}"
+              AutomationProperties.AutomationId="EmptyStateOverlay">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid x:Name="EmptyStateTabStripChrome"
+                  Grid.Row="0"
+                  MinHeight="48"
+                  IsHitTestVisible="False"
+                  Background="{ThemeResource LayerFillColorDefault}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition x:Name="EmptyStateCaptionButtonsPaddingColumn" Width="0"/>
+                </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0"
+                      Background="Transparent"
+                      x:Name="EmptyStateDragRegion"
+                      MinWidth="48"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"/>
+            </Grid>
+
+            <Grid Grid.Row="1"
+                  AllowDrop="True"
+                  Background="Transparent"
+                  DragOver="EmptyState_DragOver"
+                  DragLeave="EmptyState_DragLeave"
+                  Drop="EmptyState_Drop">
+                <Border x:Name="EmptyStateDropHighlight"
+                        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                        BorderThickness="2"
+                        CornerRadius="8"
+                        Margin="24"
+                        Opacity="0"
+                        IsHitTestVisible="False"/>
+                <StackPanel VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Spacing="16"
+                            MaxWidth="420"
+                            Padding="24">
+                    <Viewbox Width="56"
+                             Height="56"
+                             HorizontalAlignment="Center"
+                             Opacity="0.55"
+                             IsHitTestVisible="False">
+                        <SymbolIcon Symbol="SlideShow"/>
+                    </Viewbox>
+                    <TextBlock Text="Open a video to get started"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               IsHitTestVisible="False"/>
+                    <TextBlock Text="Choose a file below or drag and drop a video here"
+                               Opacity="0.7"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="WrapWholeWords"
+                               IsHitTestVisible="False"/>
+                    <Button x:Name="EmptyStateOpenButton"
+                            Style="{StaticResource AccentButtonStyle}"
+                            HorizontalAlignment="Center"
+                            MinWidth="220"
+                            MinHeight="48"
+                            Click="EmptyStateOpenButton_Click"
+                            AutomationProperties.AutomationId="EmptyStateOpenButton">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <SymbolIcon Symbol="OpenFile"/>
+                            <TextBlock Text="Open video" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Grid>
 
         <Grid x:Name="PlayerFullScreenOverlay"
               Visibility="Collapsed"

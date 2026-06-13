@@ -39,6 +39,9 @@
     <None Remove="MixedMediaPlayer.xaml" />
     <None Remove="MixerPage.xaml" />
     <None Remove="Styles.xaml" />
+    <None Update="Assets\trackmixerv2.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Assets\video.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
