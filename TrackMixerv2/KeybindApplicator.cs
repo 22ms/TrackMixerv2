@@ -1,120 +1,144 @@
-using Microsoft.UI.Input;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
-using Windows.UI.Core;
 
 namespace TrackMixerv2;
 
 public static class KeybindApplicator
 {
-  private static bool _mainWindowHooked;
-  private static readonly HashSet<MixerPage> _hookedMixerPages = new();
+    private static bool _mainWindowHooked;
+    private static readonly HashSet<MixerPage> _hookedMixerPages = new();
 
-  public static void ApplyToMainWindow(MainWindow window)
-  {
-    if (_mainWindowHooked)
-      return;
-
-    window.RootGrid.AddHandler(
-        UIElement.PreviewKeyDownEvent,
-        new KeyEventHandler((sender, args) => HandleMainWindowKey(window, args)),
-        true);
-    _mainWindowHooked = true;
-  }
-
-  public static void ApplyToMixerPage(MixerPage page)
-  {
-    if (!_hookedMixerPages.Add(page))
-      return;
-
-    page.PageRootGrid.AddHandler(
-        UIElement.PreviewKeyDownEvent,
-        new KeyEventHandler((sender, args) => HandleMixerPageKey(page, args)),
-        true);
-  }
-
-  public static void RefreshAll()
-  {
-  }
-
-  private static void HandleMainWindowKey(MainWindow window, KeyRoutedEventArgs args)
-  {
-    if (window.ActiveMixerPage?.TryHandleKeybindRecording(args) == true)
-      return;
-
-    if (Matches(KeybindAction.ExitFullscreen, args))
+    public static void ApplyToMainWindow(MainWindow window)
     {
-      window.ExitPlayerFullScreenFromKeybind(null!, null!);
-      args.Handled = true;
-      return;
+        if (_mainWindowHooked)
+            return;
+
+        window.RootGrid.AddHandler(
+            UIElement.KeyDownEvent,
+            new KeyEventHandler((sender, args) => HandleMainWindowKey(window, args)),
+            false);
+        _mainWindowHooked = true;
     }
 
-    if (Matches(KeybindAction.NewTab, args))
+    public static void ApplyToMixerPage(MixerPage page)
     {
-      window.NewTabFromKeybind(null!, null!);
-      args.Handled = true;
-      return;
+        if (!_hookedMixerPages.Add(page))
+            return;
+
+        page.PageRootGrid.AddHandler(
+            UIElement.KeyDownEvent,
+            new KeyEventHandler((sender, args) => HandleMixerPageKey(page, args)),
+            false);
     }
 
-    if (Matches(KeybindAction.CloseTab, args))
+    private static void HandleMainWindowKey(MainWindow window, KeyRoutedEventArgs args)
     {
-      window.CloseTabFromKeybind(null!, null!);
-      args.Handled = true;
-      return;
+        if (window.ActiveMixerPage?.TryHandleKeybindRecording(args) == true)
+            return;
+
+        if (!ShouldHandleKeybind(window.RootGrid, args))
+            return;
+
+        if (TryHandleMainWindowAction(window, KeybindAction.ExitFullscreen, args))
+            return;
+        if (TryHandleMainWindowAction(window, KeybindAction.NewTab, args))
+            return;
+        if (TryHandleMainWindowAction(window, KeybindAction.CloseTab, args))
+            return;
+        if (TryHandleMainWindowAction(window, KeybindAction.NextTab, args))
+            return;
+        TryHandleMainWindowAction(window, KeybindAction.PreviousTab, args);
     }
 
-    if (Matches(KeybindAction.NextTab, args))
+    private static void HandleMixerPageKey(MixerPage page, KeyRoutedEventArgs args)
     {
-      window.NextTabFromKeybind(null!, null!);
-      args.Handled = true;
-      return;
+        if (page.TryHandleKeybindRecording(args))
+            return;
+
+        if (!ShouldHandleKeybind(page.PageRootGrid, args))
+            return;
+
+        if (TryHandleMixerPageAction(page, KeybindAction.PlayPause, args))
+            return;
+        if (TryHandleMixerPageAction(page, KeybindAction.Rewind, args))
+            return;
+        TryHandleMixerPageAction(page, KeybindAction.FastForward, args);
     }
 
-    if (Matches(KeybindAction.PreviousTab, args))
+    private static bool ShouldHandleKeybind(UIElement scope, KeyRoutedEventArgs args)
     {
-      window.PreviousTabFromKeybind(null!, null!);
-      args.Handled = true;
-    }
-  }
+        if (args.Handled)
+            return false;
 
-  private static void HandleMixerPageKey(MixerPage page, KeyRoutedEventArgs args)
-  {
-    if (page.TryHandleKeybindRecording(args))
-      return;
+        if (IsModifierKey(args.Key))
+            return false;
 
-    if (Matches(KeybindAction.PlayPause, args))
-    {
-      page.PlayPauseFromKeybind(null!, null!);
-      args.Handled = true;
-      return;
+        DependencyObject? focused = FocusManager.GetFocusedElement(scope.XamlRoot) as DependencyObject;
+        return !KeybindFocusPolicy.ShouldDeferKeybind(focused, args);
     }
 
-    if (Matches(KeybindAction.Rewind, args))
+    private static bool TryHandleMainWindowAction(MainWindow window, KeybindAction action, KeyRoutedEventArgs args)
     {
-      page.RewindFromKeybind(null!, null!);
-      args.Handled = true;
-      return;
+        if (!Matches(action, args))
+            return false;
+
+        switch (action)
+        {
+            case KeybindAction.ExitFullscreen:
+                window.ExitPlayerFullScreenFromKeybind(null!, null!);
+                break;
+            case KeybindAction.NewTab:
+                window.NewTabFromKeybind(null!, null!);
+                break;
+            case KeybindAction.CloseTab:
+                window.CloseTabFromKeybind(null!, null!);
+                break;
+            case KeybindAction.NextTab:
+                window.NextTabFromKeybind(null!, null!);
+                break;
+            case KeybindAction.PreviousTab:
+                window.PreviousTabFromKeybind(null!, null!);
+                break;
+        }
+
+        args.Handled = true;
+        return true;
     }
 
-    if (Matches(KeybindAction.FastForward, args))
+    private static bool TryHandleMixerPageAction(MixerPage page, KeybindAction action, KeyRoutedEventArgs args)
     {
-      page.FastForwardFromKeybind(null!, null!);
-      args.Handled = true;
+        if (!Matches(action, args))
+            return false;
+
+        switch (action)
+        {
+            case KeybindAction.PlayPause:
+                page.PlayPauseFromKeybind(null!, null!);
+                break;
+            case KeybindAction.Rewind:
+                page.RewindFromKeybind(null!, null!);
+                break;
+            case KeybindAction.FastForward:
+                page.FastForwardFromKeybind(null!, null!);
+                break;
+        }
+
+        args.Handled = true;
+        return true;
     }
-  }
 
-  internal static bool Matches(KeybindAction action, KeyRoutedEventArgs args)
-  {
-    if (IsModifierKey(args.Key))
-      return false;
+    internal static bool Matches(KeybindAction action, KeyRoutedEventArgs args)
+    {
+        if (IsModifierKey(args.Key))
+            return false;
 
-    KeybindChord chord = KeybindStore.Get(action);
-    return (int)args.Key == chord.Key && KeybindChordCapture.GetCurrentModifiers() == chord.Modifiers;
-  }
+        KeybindChord chord = KeybindStore.Get(action);
+        return (int)args.Key == chord.Key && KeybindChordCapture.GetCurrentModifiers() == chord.Modifiers;
+    }
 
-  private static bool IsModifierKey(VirtualKey key) =>
-      KeybindChordCapture.IsModifierKey(key);
+    private static bool IsModifierKey(VirtualKey key) =>
+        KeybindChordCapture.IsModifierKey(key);
 }

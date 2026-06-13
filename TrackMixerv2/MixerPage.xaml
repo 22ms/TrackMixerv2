@@ -189,7 +189,13 @@
                         <Grid x:Name="VolumeControlGrid"
                               Grid.Column="0"
                               HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"/>
+                              VerticalAlignment="Stretch"
+                              ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="72"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                        </Grid>
                         <Border Grid.Column="1"
                                 Width="1"
                                 Margin="0,4"

@@ -33,6 +33,7 @@ namespace TrackMixerv2
         List<Slider> VolumeSliders = new List<Slider>();
         List<Slider> FlyoutVolumeSliders = new List<Slider>();
         bool syncingVolumeSliders;
+        private const double FlyoutVolumeTrackLabelWidth = 96;
         List<double> CachedSliderValues = new List<double>();
         private bool suppressRatingSave;
         private long ratingValueChangedToken;
@@ -441,8 +442,6 @@ namespace TrackMixerv2
                 LoadMetadata(args.path);
                 int trackCount = args.TrackPlayers.Count;
                 var flyoutContent = MixedMediaPlayer.customMixedMediaPlayerControl?.TrackVolumeFlyoutContent;
-                for (int i = 0; i < trackCount; i++)
-                    VolumeControlGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
                 for (int i = 0; i < trackCount; i++)
                 {
@@ -450,7 +449,7 @@ namespace TrackMixerv2
                     string trackNameText = GetTrackName(args.TrackPlayers[i], trackIndex);
                     double savedValue = GetSavedSliderValue(trackIndex);
 
-                    Slider panelSlider = CreateVolumeSlider(trackIndex, new Thickness(0, 6, 0, 6), $"VolumeSlider_{trackIndex}");
+                    Slider panelSlider = CreateVolumeSlider(trackIndex, new Thickness(0, 6, 0, 6), $"VolumeSlider_{trackIndex}", $"{trackNameText} volume");
                     panelSlider.Value = savedValue;
                     MixedMediaPlayer.SetVolume(trackIndex, savedValue);
 
@@ -468,13 +467,11 @@ namespace TrackMixerv2
                     VolumeSliderChangedHandlers.Add(panelSliderChangedHandler);
                     VolumeSliders.Add(panelSlider);
 
-                    var panelRow = CreateVolumeRow(trackNameText, panelSlider, labelMinWidth: 72);
-                    Grid.SetRow(panelRow, i);
-                    VolumeControlGrid.Children.Add(panelRow);
+                    AddVolumeTrackToGrid(VolumeControlGrid, i, trackNameText, panelSlider);
 
                     if (flyoutContent != null)
                     {
-                        Slider flyoutSlider = CreateVolumeSlider(trackIndex, new Thickness(0), $"VolumeFlyoutSlider_{trackIndex}");
+                        Slider flyoutSlider = CreateVolumeSlider(trackIndex, new Thickness(0), $"VolumeFlyoutSlider_{trackIndex}", $"{trackNameText} volume");
                         flyoutSlider.Value = savedValue;
                         var flyoutSliderChangedHandler = new RangeBaseValueChangedEventHandler(async (e, a) =>
                         {
@@ -489,7 +486,7 @@ namespace TrackMixerv2
                         flyoutSlider.ValueChanged += flyoutSliderChangedHandler;
                         FlyoutVolumeSliderChangedHandlers.Add(flyoutSliderChangedHandler);
                         FlyoutVolumeSliders.Add(flyoutSlider);
-                        flyoutContent.Children.Add(CreateVolumeRow(trackNameText, flyoutSlider, labelMinWidth: 96));
+                        flyoutContent.Children.Add(CreateVolumeRow(trackNameText, flyoutSlider, FlyoutVolumeTrackLabelWidth));
                     }
                 }
             });
@@ -523,11 +520,12 @@ namespace TrackMixerv2
             }
         }
 
-        private static Slider CreateVolumeSlider(int trackIndex, Thickness margin, string automationId)
+        private static Slider CreateVolumeSlider(int trackIndex, Thickness margin, string automationId, string accessibleName)
         {
             var volumeSlider = new Slider
             {
-                IsTabStop = false,
+                IsTabStop = true,
+                UseSystemFocusVisuals = true,
                 Margin = margin,
                 TickFrequency = 5,
                 TickPlacement = TickPlacement.None,
@@ -537,10 +535,32 @@ namespace TrackMixerv2
                 Minimum = 0,
             };
             AutomationProperties.SetAutomationId(volumeSlider, automationId);
+            AutomationProperties.SetName(volumeSlider, accessibleName);
             return volumeSlider;
         }
 
-        private static Grid CreateVolumeRow(string trackNameText, Slider volumeSlider, double labelMinWidth)
+        private static void AddVolumeTrackToGrid(Grid grid, int row, string trackNameText, Slider volumeSlider)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var trackName = new TextBlock
+            {
+                Text = trackNameText,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            ToolTipService.SetToolTip(trackName, trackNameText);
+
+            Grid.SetRow(trackName, row);
+            Grid.SetColumn(trackName, 0);
+            Grid.SetRow(volumeSlider, row);
+            Grid.SetColumn(volumeSlider, 1);
+            grid.Children.Add(trackName);
+            grid.Children.Add(volumeSlider);
+        }
+
+        private static Grid CreateVolumeRow(string trackNameText, Slider volumeSlider, double labelWidth)
         {
             var trackName = new TextBlock
             {
@@ -549,6 +569,7 @@ namespace TrackMixerv2
                 FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
+            ToolTipService.SetToolTip(trackName, trackNameText);
 
             var row = new Grid
             {
@@ -556,7 +577,7 @@ namespace TrackMixerv2
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
             };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = labelMinWidth });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(labelWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(trackName, 0);
             Grid.SetColumn(volumeSlider, 1);
@@ -726,11 +747,30 @@ namespace TrackMixerv2
 
             KeybindAction action = _recordingKeybindAction.Value;
             KeybindChord chord = KeybindChordCapture.CreateChord(args.Key);
-            KeybindStore.Set(action, chord);
+            if (!KeybindStore.TrySet(action, chord, out string? validationError))
+            {
+                CancelKeybindRecording();
+                _ = ShowKeybindRebindBlockedDialogAsync(validationError ?? "That shortcut can't be used.");
+                return true;
+            }
+
             if (_recordingKeybindShortcutBlock != null)
                 _recordingKeybindShortcutBlock.Text = KeybindFormatter.Format(chord);
             ClearKeybindRecordingState();
             return true;
+        }
+
+        private async Task ShowKeybindRebindBlockedDialogAsync(string message)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "Shortcut not allowed",
+                Content = message,
+                CloseButtonText = "OK",
+                XamlRoot = PageRootGrid.XamlRoot,
+            };
+
+            await dialog.ShowAsync();
         }
 
         private void RefreshKeybindList()

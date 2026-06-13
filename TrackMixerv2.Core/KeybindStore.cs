@@ -99,12 +99,34 @@ public static class KeybindStore
 
   public static void Set(KeybindAction action, KeybindChord chord)
   {
+    if (!TryValidateChord(action, chord, out _))
+      return;
+
     EnsureLoaded();
     lock (Lock)
     {
       cache![action] = chord;
       PersistLocked();
     }
+  }
+
+  public static bool TryValidateChord(KeybindAction action, KeybindChord chord, out string? error) =>
+      KeybindFocusRules.TryValidateChord(action, chord, out error);
+
+  public static bool TrySet(KeybindAction action, KeybindChord chord, out string? error)
+  {
+    if (!TryValidateChord(action, chord, out error))
+      return false;
+
+    EnsureLoaded();
+    lock (Lock)
+    {
+      cache![action] = chord;
+      PersistLocked();
+    }
+
+    error = null;
+    return true;
   }
 
   public static void ResetToDefaults()

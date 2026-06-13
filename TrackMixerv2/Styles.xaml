@@ -1182,4 +1182,8 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <Style TargetType="Slider" BasedOn="{StaticResource DefaultSliderStyle}">
+        <Setter Property="local:SliderWheelBehavior.IsEnabled" Value="True" />
+    </Style>
 </ResourceDictionary>

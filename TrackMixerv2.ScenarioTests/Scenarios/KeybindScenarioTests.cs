@@ -38,6 +38,29 @@ public sealed class KeybindScenarioTests : IDisposable
         Assert.Equal("Ctrl+B", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.Rewind)));
     }
 
+    [Fact]
+    public void Set_rejects_tab_and_leaves_previous_binding()
+    {
+        KeybindStore.ResetCache();
+        KeybindChord original = KeybindStore.Get(KeybindAction.PlayPause);
+
+        KeybindStore.Set(KeybindAction.PlayPause, new KeybindChord(0x09));
+
+        Assert.Equal(original.Key, KeybindStore.Get(KeybindAction.PlayPause).Key);
+        Assert.Equal(original.Modifiers, KeybindStore.Get(KeybindAction.PlayPause).Modifiers);
+    }
+
+    [Fact]
+    public void Default_playback_shortcuts_use_natural_unmodified_keys()
+    {
+        KeybindStore.ResetCache();
+
+        Assert.Equal(0x20, KeybindStore.Get(KeybindAction.PlayPause).Key);
+        Assert.Equal(0, KeybindStore.Get(KeybindAction.PlayPause).Modifiers);
+        Assert.Equal(0x25, KeybindStore.Get(KeybindAction.Rewind).Key);
+        Assert.Equal(0x27, KeybindStore.Get(KeybindAction.FastForward).Key);
+    }
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable(LocalSettingsStore.JsonPathEnvVar, _previousSettingsPathEnv);
