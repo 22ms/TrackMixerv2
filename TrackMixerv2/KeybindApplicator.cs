@@ -67,10 +67,13 @@ public static class KeybindApplicator
         if (window.ActiveMixerPage?.TryHandleKeybindRecordingKeyDown(args) == true)
             return;
 
+        if (TryHandleEscapeExitFullscreen(window, args))
+            return;
+
         if (!ShouldHandleKeybind(window.RootGrid, args))
             return;
 
-        if (TryHandleMainWindowAction(window, KeybindAction.ExitFullscreen, args))
+        if (TryHandleMainWindowAction(window, KeybindAction.ToggleFullscreen, args))
             return;
         if (TryHandleMainWindowAction(window, KeybindAction.NewTab, args))
             return;
@@ -111,6 +114,19 @@ public static class KeybindApplicator
         return !KeybindFocusPolicy.ShouldDeferKeybind(focused, args);
     }
 
+    private static bool TryHandleEscapeExitFullscreen(MainWindow window, KeyRoutedEventArgs args)
+    {
+        if (args.Handled || args.Key != VirtualKey.Escape || KeybindRecordingGate.IsRecording)
+            return false;
+
+        if (!window.IsPlayerFullScreen)
+            return false;
+
+        window.ExitPlayerFullScreenFromKeybind(null!, null!);
+        args.Handled = true;
+        return true;
+    }
+
     private static bool TryHandleMainWindowAction(MainWindow window, KeybindAction action, KeyRoutedEventArgs args)
     {
         if (!Matches(action, args))
@@ -118,8 +134,8 @@ public static class KeybindApplicator
 
         switch (action)
         {
-            case KeybindAction.ExitFullscreen:
-                window.ExitPlayerFullScreenFromKeybind(null!, null!);
+            case KeybindAction.ToggleFullscreen:
+                window.TogglePlayerFullScreenFromKeybind(null!, null!);
                 break;
             case KeybindAction.NewTab:
                 window.NewTabFromKeybind(null!, null!);

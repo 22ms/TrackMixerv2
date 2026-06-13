@@ -62,6 +62,18 @@ public sealed class KeybindScenarioTests : IDisposable
         Assert.Equal(0x27, KeybindStore.Get(KeybindAction.FastForward).Key);
     }
 
+    [Fact]
+    public void Toggle_fullscreen_defaults_to_f11_and_rejects_escape()
+    {
+        KeybindStore.ResetCache();
+
+        Assert.Equal(0x7A, KeybindStore.Get(KeybindAction.ToggleFullscreen).Key);
+        Assert.Equal(0, KeybindStore.Get(KeybindAction.ToggleFullscreen).Modifiers);
+        Assert.Equal("F11", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.ToggleFullscreen)));
+        Assert.False(KeybindStore.TrySet(KeybindAction.ToggleFullscreen, new KeybindChord(0x1B), out string? error));
+        Assert.Contains("Escape", error, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable(LocalSettingsStore.JsonPathEnvVar, _previousSettingsPathEnv);

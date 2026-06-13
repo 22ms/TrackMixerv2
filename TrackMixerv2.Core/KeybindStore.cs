@@ -14,7 +14,7 @@ public enum KeybindAction
     CloseTab,
     NextTab,
     PreviousTab,
-    ExitFullscreen,
+    ToggleFullscreen,
 }
 
 public sealed class KeybindChord
@@ -55,7 +55,7 @@ public static class KeybindStore
           [KeybindAction.CloseTab] = new(0x57, 2), // W + Control
           [KeybindAction.NextTab] = new(0x21, 2), // PageUp + Control
           [KeybindAction.PreviousTab] = new(0x22, 2), // PageDown + Control
-          [KeybindAction.ExitFullscreen] = new(0x1B), // Escape
+          [KeybindAction.ToggleFullscreen] = new(0x7A), // F11
       };
 
   public static IReadOnlyList<(KeybindAction Action, string Label)> DisplayOrder { get; } =
@@ -69,7 +69,7 @@ public static class KeybindStore
       (KeybindAction.CloseTab, "Close tab"),
       (KeybindAction.NextTab, "Next tab"),
       (KeybindAction.PreviousTab, "Previous tab"),
-      (KeybindAction.ExitFullscreen, "Exit fullscreen"),
+      (KeybindAction.ToggleFullscreen, "Toggle fullscreen"),
   ];
 
   public static KeybindChord Get(KeybindAction action)
@@ -168,10 +168,20 @@ public static class KeybindStore
 
       foreach (var pair in parsed)
       {
-        if (Enum.TryParse<KeybindAction>(pair.Key, out var action) && pair.Value != null)
-          loaded[action] = KeybindHoldRules.IsHoldAction(action)
-              ? KeybindHoldRules.SanitizeHoldChord(pair.Value)
-              : pair.Value;
+        string actionName = pair.Key == "ExitFullscreen" ? nameof(KeybindAction.ToggleFullscreen) : pair.Key;
+        if (!Enum.TryParse<KeybindAction>(actionName, out var action) || pair.Value == null)
+          continue;
+
+        KeybindChord chord = KeybindHoldRules.IsHoldAction(action)
+            ? KeybindHoldRules.SanitizeHoldChord(pair.Value)
+            : pair.Value;
+
+        if (action == KeybindAction.ToggleFullscreen
+            && chord.Key == 0x1B
+            && chord.Modifiers == 0)
+          continue;
+
+        loaded[action] = chord;
       }
     }
     catch

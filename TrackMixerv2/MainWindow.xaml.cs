@@ -95,6 +95,16 @@ namespace TrackMixerv2
             args?.Handled = true;
         }
 
+        internal void TogglePlayerFullScreenFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
+        {
+            if (IsPlayerFullScreen)
+                ExitPlayerFullScreen();
+            else if (ActiveMixerPage?.MixedMediaPlayer != null)
+                TogglePlayerFullScreen(ActiveMixerPage.MixedMediaPlayer);
+
+            args?.Handled = true;
+        }
+
         internal void NewTabFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
             TabView_AddTabButtonClick(TabView, new RoutedEventArgs());

@@ -46,6 +46,14 @@ public static class KeybindFocusRules
     {
         error = null;
 
+        if (action == KeybindAction.ToggleFullscreen
+            && chord.Key == 0x1B
+            && chord.Modifiers == 0)
+        {
+            error = "Escape always exits fullscreen and can't be reassigned. Choose another key for toggle fullscreen.";
+            return false;
+        }
+
         if (TryGetAccessibilityConflictMessage(chord, out error))
             return false;
 
