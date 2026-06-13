@@ -2,6 +2,7 @@ using TrackMixerv2;
 
 namespace TrackMixerv2.ScenarioTests.Scenarios;
 
+[Collection(AppStateCollection.Name)]
 public sealed class KeybindScenarioTests : IDisposable
 {
     private readonly string _settingsPath;

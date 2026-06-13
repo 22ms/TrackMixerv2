@@ -2,6 +2,7 @@ using TrackMixerv2;
 
 namespace TrackMixerv2.ScenarioTests.Scenarios;
 
+[Collection(AppStateCollection.Name)]
 public sealed class AppPathsScenarioTests : IDisposable
 {
   private readonly string? _previousUiTestFlag;

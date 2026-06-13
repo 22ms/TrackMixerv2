@@ -14,10 +14,15 @@ public static class LocalSettingsStore
         public const string RecentVideo = "RecentVideo";
         public const string SkipSeconds = "SkipSeconds";
         public const string SliderWheelSpeed = "SliderWheelSpeed";
+        public const string SpeedBoostRate = "SpeedBoostRate";
+        public const string SpeedSlowRate = "SpeedSlowRate";
+        public const string TransportRatesJson = "TransportRatesJson";
     }
 
     public const int DefaultSkipSeconds = 5;
     public const int DefaultSliderWheelSpeed = 2;
+    public const double DefaultSpeedBoostRate = 2.0;
+    public const double DefaultSpeedSlowRate = 0.25;
 
     private static readonly object Lock = new();
     private static Dictionary<string, object>? cache;
@@ -37,9 +42,8 @@ public static class LocalSettingsStore
 
     public static bool ContainsKey(string key)
     {
-        EnsureLoaded();
         lock (Lock)
-            return cache!.ContainsKey(key);
+            return GetOrLoadCacheLocked().ContainsKey(key);
     }
 
     public static bool GetBool(string key, bool defaultValue = false)
@@ -93,39 +97,93 @@ public static class LocalSettingsStore
     public static void SetSliderWheelSpeed(int speed) =>
         Set(Keys.SliderWheelSpeed, Math.Max(1, speed));
 
+    public static double GetSpeedBoostRate(double defaultValue = DefaultSpeedBoostRate) =>
+        PlaybackRates.NormalizeBoostRate(GetDouble(Keys.SpeedBoostRate, defaultValue));
+
+    public static void SetSpeedBoostRate(double rate) =>
+        Set(Keys.SpeedBoostRate, PlaybackRates.NormalizeBoostRate(rate));
+
+    public static double GetSpeedSlowRate(double defaultValue = DefaultSpeedSlowRate) =>
+        PlaybackRates.NormalizeSlowRate(GetDouble(Keys.SpeedSlowRate, defaultValue));
+
+    public static void SetSpeedSlowRate(double rate) =>
+        Set(Keys.SpeedSlowRate, PlaybackRates.NormalizeSlowRate(rate));
+
+    public static IReadOnlyList<double> GetTransportRates()
+    {
+        if (!ContainsKey(Keys.TransportRatesJson))
+            return PlaybackRates.Defaults.ToArray();
+
+        try
+        {
+            string? json = GetString(Keys.TransportRatesJson);
+            if (string.IsNullOrWhiteSpace(json))
+                return PlaybackRates.Defaults.ToArray();
+
+            var parsed = JsonConvert.DeserializeObject<List<double>>(json);
+            return PlaybackRates.SanitizeTransportRates(parsed);
+        }
+        catch
+        {
+            return PlaybackRates.Defaults.ToArray();
+        }
+    }
+
+    public static void SetTransportRates(IEnumerable<double> rates)
+    {
+        IReadOnlyList<double> sanitized = PlaybackRates.SanitizeTransportRates(rates);
+        Set(Keys.TransportRatesJson, JsonConvert.SerializeObject(sanitized));
+    }
+
+    public static void ResetTransportRates()
+    {
+        lock (Lock)
+        {
+            GetOrLoadCacheLocked().Remove(Keys.TransportRatesJson);
+            PersistLocked();
+        }
+    }
+
+    public static double GetDouble(string key, double defaultValue = 0)
+    {
+        if (!TryGetValue(key, out object? value) || value == null)
+            return defaultValue;
+
+        return value switch
+        {
+            double d => d,
+            float f => f,
+            int i => i,
+            long l => l,
+            string s when double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double parsed) => parsed,
+            _ => defaultValue,
+        };
+    }
+
     public static void SetBool(string key, bool value) => Set(key, value);
 
     public static void SetString(string key, string value) => Set(key, value);
 
     public static void Set(string key, object value)
     {
-        EnsureLoaded();
         lock (Lock)
         {
-            cache![key] = value;
+            GetOrLoadCacheLocked()[key] = value;
             PersistLocked();
         }
     }
 
     private static bool TryGetValue(string key, out object? value)
     {
-        EnsureLoaded();
         lock (Lock)
-            return cache!.TryGetValue(key, out value);
+            return GetOrLoadCacheLocked().TryGetValue(key, out value);
     }
 
-    private static void EnsureLoaded()
+    private static Dictionary<string, object> GetOrLoadCacheLocked()
     {
-        if (cache != null)
-            return;
-
-        lock (Lock)
-        {
-            if (cache != null)
-                return;
-
+        if (cache == null)
             cache = LoadFromDisk();
-        }
+        return cache;
     }
 
     private static Dictionary<string, object> LoadFromDisk()
@@ -147,6 +205,7 @@ public static class LocalSettingsStore
                 {
                     JTokenType.Boolean => property.Value.Value<bool>(),
                     JTokenType.Integer => property.Value.Value<int>(),
+                    JTokenType.Float => property.Value.Value<double>(),
                     _ => property.Value.ToString(),
                 };
             }

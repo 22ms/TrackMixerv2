@@ -328,15 +328,7 @@ namespace TrackMixerv2
             if (TabView.SelectedItem is not TabViewItem tabViewItem || tabViewItem.Content is not MixerPage page)
                 return false;
 
-            page.PauseMedia();
-            try
-            {
-                return await page.ShowRootFolderManagerAsync();
-            }
-            finally
-            {
-                page.PlayMedia();
-            }
+            return await page.ShowRootFolderManagerAsync();
         }
 
         public async Task<string?> PickRootFolderAsync()
@@ -531,11 +523,11 @@ namespace TrackMixerv2
                     {
                         MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
                         if (page == null) return;
-                        page.PauseMedia();
+                        var wasPlaying = page.PauseMediaIfPlaying();
                         IReadOnlyList<StorageFile> files = await OpenFilesDialog();
                         if (files.Count <= 0)
                         {
-                            page.PlayMedia();
+                            page.ResumeMediaIfWasPlaying(wasPlaying);
                             return;
                         }
                         string file = files.First().Path;
@@ -546,15 +538,7 @@ namespace TrackMixerv2
                     {
                         MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
                         if (page == null) return;
-                        page.PauseMedia();
-                        try
-                        {
-                            await page.ShowRootFolderManagerAsync();
-                        }
-                        finally
-                        {
-                            page.PlayMedia();
-                        }
+                        await page.ShowRootFolderManagerAsync();
                         break;
                     }
                 case "exportFile":
@@ -653,9 +637,10 @@ namespace TrackMixerv2
             if (page == null)
                 return;
 
-            page.PauseMedia();
-
-            double[] levels = page.GetVolumeLevels();
+            var wasPlaying = page.PauseMediaIfPlaying();
+            try
+            {
+                double[] levels = page.GetVolumeLevels();
             double[] normalizedLevels = levels.Select(l => l / 100.0).ToArray();
             string inputPath = page.GetCurrentPath();
 
@@ -800,7 +785,6 @@ namespace TrackMixerv2
                         CloseButtonText = "OK",
                         XamlRoot = this.Content.XamlRoot
                     }.ShowAsync();
-                    page.PlayMedia();
                     return;
                 }
 
@@ -842,7 +826,6 @@ namespace TrackMixerv2
                         CloseButtonText = "OK",
                         XamlRoot = this.Content.XamlRoot
                     }.ShowAsync();
-                    page.PlayMedia();
                     return;
                 }
 
@@ -865,7 +848,6 @@ namespace TrackMixerv2
                         CloseButtonText = "OK",
                         XamlRoot = this.Content.XamlRoot
                     }.ShowAsync();
-                    page.PlayMedia();
                     return;
                 }
 
@@ -881,7 +863,6 @@ namespace TrackMixerv2
                         CloseButtonText = "OK",
                         XamlRoot = this.Content.XamlRoot
                     }.ShowAsync();
-                    page.PlayMedia();
                     return;
                 }
 
@@ -944,8 +925,11 @@ namespace TrackMixerv2
                     }.ShowAsync();
                 }
             }
-
-            page.PlayMedia();
+            }
+            finally
+            {
+                page.ResumeMediaIfWasPlaying(wasPlaying);
+            }
         }
 
         private async Task CopyFileToClipboardAsync(string filePath)

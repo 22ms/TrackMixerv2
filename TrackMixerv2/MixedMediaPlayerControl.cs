@@ -9,11 +9,6 @@ namespace TrackMixerv2
     {
         private static Style _compactSelectionFlyoutRadioItemStyle;
 
-        private static readonly double[] PlaybackRates =
-        {
-            0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8
-        };
-
         public Slider ProgressSlider;
         public Button NextTrackButton, PreviousTrackButton;
         public StackPanel TrackVolumeFlyoutContent;
@@ -64,26 +59,39 @@ namespace TrackMixerv2
                 return;
 
             if (_playbackRateOptions.Count == 0)
-            {
-                var itemStyle = _compactSelectionFlyoutRadioItemStyle
-                    ??= Application.Current.Resources["CompactSelectionFlyoutRadioItemStyle"] as Style;
+                RebuildPlaybackRateFlyout();
+            else
+                SpeedSelectButton.IsEnabled = true;
+        }
 
-                foreach (double rate in PlaybackRates)
+        public void RebuildPlaybackRateFlyout(double? currentRate = null)
+        {
+            if (SpeedSelectButton == null || _speedSelectMenuFlyout == null)
+                return;
+
+            _speedSelectMenuFlyout.Items.Clear();
+            _playbackRateOptions.Clear();
+
+            var itemStyle = _compactSelectionFlyoutRadioItemStyle
+                ??= Application.Current.Resources["CompactSelectionFlyoutRadioItemStyle"] as Style;
+
+            foreach (double rate in PlaybackRates.All)
+            {
+                var item = new RadioMenuFlyoutItem
                 {
-                    var item = new RadioMenuFlyoutItem
-                    {
-                        GroupName = "PlaybackRate",
-                        Tag = rate,
-                        Text = FormatPlaybackRate(rate),
-                        IsChecked = Math.Abs(rate - 1) < 0.001,
-                        Style = itemStyle
-                    };
-                    _playbackRateOptions.Add(item);
-                    _speedSelectMenuFlyout.Items.Add(item);
-                }
+                    GroupName = "PlaybackRate",
+                    Tag = rate,
+                    Text = FormatPlaybackRate(rate),
+                    IsChecked = Math.Abs(rate - 1) < 0.001,
+                    Style = itemStyle
+                };
+                _playbackRateOptions.Add(item);
+                _speedSelectMenuFlyout.Items.Add(item);
             }
 
-            SpeedSelectButton.IsEnabled = true;
+            SpeedSelectButton.IsEnabled = _playbackRateOptions.Count > 0;
+            if (currentRate.HasValue)
+                SetPlaybackRateSelection(PlaybackRates.SnapToNearestTransportRate(currentRate.Value));
         }
 
         public void SetPlaybackRateSelection(double rate)
@@ -91,12 +99,6 @@ namespace TrackMixerv2
             FlyoutMenuHelper.SelectByPlaybackRate(_playbackRateOptions, rate);
         }
 
-        private static string FormatPlaybackRate(double rate)
-        {
-            if (Math.Abs(rate - 1) < 0.001)
-                return "1×";
-
-            return rate % 1 == 0 ? $"{rate:0}×" : $"{rate:0.##}×";
-        }
+        private static string FormatPlaybackRate(double rate) => PlaybackRates.Format(rate);
     }
 }

@@ -40,11 +40,11 @@
 
             <MenuBarItem x:Name="FileMenuBarItem" Title="File">
 
-                <MenuFlyoutItem x:FieldModifier="public" x:Name="OpenFileFlyout" Text="Open..." Tag="openFile" />
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="OpenFileFlyout" Text="Open" Tag="openFile" />
 
-                <MenuFlyoutItem x:FieldModifier="public" x:Name="ManageRootFoldersFlyout" Text="Root folders..." Tag="manageRootFolders"/>
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="ManageRootFoldersFlyout" Text="Root folders" Tag="manageRootFolders"/>
 
-                <MenuFlyoutItem x:FieldModifier="public" x:Name="ExportFlyout" Text="Export current file..." Tag="exportFile"/>
+                <MenuFlyoutItem x:FieldModifier="public" x:Name="ExportFlyout" Text="Export current file" Tag="exportFile"/>
 
             </MenuBarItem>
 
@@ -78,7 +78,12 @@
 
                DefaultButton="Primary">
 
-            <StackPanel Spacing="12">
+            <ScrollViewer x:Name="PreferencesScrollViewer"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          ZoomMode="Disabled"
+                          Padding="0,0,12,0">
+                <StackPanel x:Name="PreferencesContentPanel" Spacing="12" MinWidth="360">
 
                 <CheckBox x:Name="DragAndDropCheckBox" Content="Open drag-and-drop on new tab"/>
 
@@ -106,7 +111,61 @@
                            Opacity="0.8"
                            FontSize="12" />
 
-            </StackPanel>
+                <TextBlock Text="Speed boost rate (hold keybind)" />
+                <ComboBox x:Name="SpeedBoostRateComboBox"
+                          HorizontalAlignment="Stretch" />
+
+                <TextBlock Text="Slow motion rate (hold keybind)" />
+                <ComboBox x:Name="SpeedSlowRateComboBox"
+                          HorizontalAlignment="Stretch" />
+                <TextBlock Text="Same speeds as the transport bar. Applied while the shortcut is held."
+                           TextWrapping="WrapWholeWords"
+                           Opacity="0.8"
+                           FontSize="12" />
+
+                <CheckBox x:Name="ShowAdvancedSettingsCheckBox"
+                          Content="Show advanced settings"
+                          Checked="ShowAdvancedSettingsCheckBox_Changed"
+                          Unchecked="ShowAdvancedSettingsCheckBox_Changed" />
+
+                <StackPanel x:Name="AdvancedPreferencesPanel"
+                            Spacing="8"
+                            Visibility="Collapsed">
+                    <TextBlock Text="Transport bar speeds"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Choose which playback speeds appear in the transport menu and hold-keybind lists. 1× always stays available."
+                               TextWrapping="WrapWholeWords"
+                               Opacity="0.8"
+                               FontSize="12" />
+                    <StackPanel x:Name="TransportRatesPanel" Spacing="6" />
+                    <TextBlock Text="Add a speed"
+                               Opacity="0.8"
+                               FontSize="12" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <NumberBox x:Name="TransportRateAddNumberBox"
+                                   Minimum="0.25"
+                                   Maximum="16"
+                                   SmallChange="0.25"
+                                   LargeChange="0.5"
+                                   PlaceholderText="e.g. 1.5"
+                                   HorizontalAlignment="Stretch" />
+                        <Button Grid.Column="1"
+                                Content="Add"
+                                Click="AddTransportRate_Click"
+                                VerticalAlignment="Bottom"
+                                MinWidth="72" />
+                    </Grid>
+                    <Button Content="Reset transport speeds to default"
+                            Click="ResetTransportRates_Click"
+                            HorizontalAlignment="Left" />
+                </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
 
         </ContentDialog>
 
@@ -118,6 +177,10 @@
                 <TextBlock Text="Clips under these folders are used for automatic playlist sorting."
                            TextWrapping="WrapWholeWords"
                            Opacity="0.8" />
+                <TextBlock x:Name="RootFolderEnvVarInfoText"
+                           TextWrapping="WrapWholeWords"
+                           Opacity="0.8"
+                           FontSize="12" />
                 <Grid MinHeight="48" MaxHeight="240">
                     <ListView x:Name="RootFolderList"
                               SelectionMode="None"

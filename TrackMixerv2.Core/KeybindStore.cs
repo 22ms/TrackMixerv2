@@ -74,9 +74,8 @@ public static class KeybindStore
 
   public static KeybindChord Get(KeybindAction action)
   {
-    EnsureLoaded();
     lock (Lock)
-      return cache![action];
+      return GetOrLoadCacheLocked()[action];
   }
 
   public static string GetActionLabel(KeybindAction action)
@@ -90,6 +89,8 @@ public static class KeybindStore
       {
         KeybindAction.Rewind => $"Rewind {LocalSettingsStore.GetSkipSeconds()}s",
         KeybindAction.FastForward => $"Forward {LocalSettingsStore.GetSkipSeconds()}s",
+        KeybindAction.SpeedBoost => $"Speed boost {PlaybackRates.Format(LocalSettingsStore.GetSpeedBoostRate())} (hold)",
+        KeybindAction.SpeedSlow => $"Slow motion {PlaybackRates.Format(LocalSettingsStore.GetSpeedSlowRate())} (hold)",
         _ => label,
       };
     }
@@ -102,10 +103,9 @@ public static class KeybindStore
     if (!TryValidateChord(action, chord, out _))
       return;
 
-    EnsureLoaded();
     lock (Lock)
     {
-      cache![action] = chord;
+      GetOrLoadCacheLocked()[action] = chord;
       PersistLocked();
     }
   }
@@ -118,10 +118,9 @@ public static class KeybindStore
     if (!TryValidateChord(action, chord, out error))
       return false;
 
-    EnsureLoaded();
     lock (Lock)
     {
-      cache![action] = chord;
+      GetOrLoadCacheLocked()[action] = chord;
       PersistLocked();
     }
 
@@ -144,18 +143,11 @@ public static class KeybindStore
       cache = null;
   }
 
-  private static void EnsureLoaded()
+  private static Dictionary<KeybindAction, KeybindChord> GetOrLoadCacheLocked()
   {
-    if (cache != null)
-      return;
-
-    lock (Lock)
-    {
-      if (cache != null)
-        return;
-
+    if (cache == null)
       cache = LoadFromDisk();
-    }
+    return cache;
   }
 
   private static Dictionary<KeybindAction, KeybindChord> LoadFromDisk()

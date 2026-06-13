@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
@@ -58,6 +59,8 @@ namespace TrackMixerv2
         private double _ratingSliderMaxWidth;
         private double _ratingControlsMinWidth;
         bool syncingSuppressRootFolderPromptCheckBox;
+        private readonly List<double> _editingTransportRates = new();
+        private bool _deleteFlyoutWasPlaying;
         public string path;
         public MixerPage(string path)
         {
@@ -101,17 +104,295 @@ namespace TrackMixerv2
         {
             SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
             SliderWheelSpeedNumberBox.Value = LocalSettingsStore.GetSliderWheelSpeed();
+            ShowAdvancedSettingsCheckBox.IsChecked = false;
+            AdvancedPreferencesPanel.Visibility = Visibility.Collapsed;
+            LoadTransportRatesEditor();
+            PopulateHoldSpeedRateComboBoxes();
+            SelectHoldSpeedRate(SpeedBoostRateComboBox, LocalSettingsStore.GetSpeedBoostRate());
+            SelectHoldSpeedRate(SpeedSlowRateComboBox, LocalSettingsStore.GetSpeedSlowRate());
+            ConfigurePreferencesScrollArea();
 
-            var result = await PreferencesDialog.ShowAsync();
-
-            if (result == ContentDialogResult.Primary)
+            var wasPlaying = PauseMediaIfPlaying();
+            try
             {
-                LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
-                LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
-                LocalSettingsStore.SetSkipSeconds((int)Math.Round(SkipSecondsNumberBox.Value));
-                LocalSettingsStore.SetSliderWheelSpeed((int)Math.Round(SliderWheelSpeedNumberBox.Value));
-                RefreshKeybindList();
+                var result = await PreferencesDialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
+                    LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
+                    LocalSettingsStore.SetSkipSeconds((int)Math.Round(SkipSecondsNumberBox.Value));
+                    LocalSettingsStore.SetSliderWheelSpeed((int)Math.Round(SliderWheelSpeedNumberBox.Value));
+
+                    double boostRate = GetSelectedHoldSpeedRate(
+                        SpeedBoostRateComboBox,
+                        LocalSettingsStore.DefaultSpeedBoostRate);
+                    double slowRate = GetSelectedHoldSpeedRate(
+                        SpeedSlowRateComboBox,
+                        LocalSettingsStore.DefaultSpeedSlowRate);
+
+                    LocalSettingsStore.SetTransportRates(_editingTransportRates);
+                    PopulateHoldSpeedRateComboBoxes();
+                    LocalSettingsStore.SetSpeedBoostRate(boostRate);
+                    LocalSettingsStore.SetSpeedSlowRate(slowRate);
+                    SelectHoldSpeedRate(SpeedBoostRateComboBox, LocalSettingsStore.GetSpeedBoostRate());
+                    SelectHoldSpeedRate(SpeedSlowRateComboBox, LocalSettingsStore.GetSpeedSlowRate());
+                    ApplyTransportPlaybackRates();
+                    RefreshKeybindList();
+                }
             }
+            finally
+            {
+                ResumeMediaIfWasPlaying(wasPlaying);
+            }
+        }
+
+        private void ConfigurePreferencesScrollArea()
+        {
+            double viewportHeight = PageRootGrid.XamlRoot?.Size.Height ?? 0;
+            if (viewportHeight <= 0 && MainWindow.Instance?.Content is FrameworkElement windowRoot)
+                viewportHeight = windowRoot.ActualHeight;
+
+            if (viewportHeight <= 0)
+                return;
+
+            // Fixed scroll height keeps the dialog from jumping vertically when advanced
+            // settings expand; width is left to flow naturally with WinUI's ContentDialog.
+            double scrollHeight = viewportHeight * 0.42;
+            PreferencesScrollViewer.MaxHeight = scrollHeight;
+            PreferencesScrollViewer.MinHeight = scrollHeight;
+        }
+
+        private void ShowAdvancedSettingsCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            bool showAdvanced = ShowAdvancedSettingsCheckBox.IsChecked == true;
+            AdvancedPreferencesPanel.Visibility = showAdvanced
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            if (showAdvanced)
+                RefreshTransportRatesList();
+        }
+
+        private void LoadTransportRatesEditor()
+        {
+            _editingTransportRates.Clear();
+            _editingTransportRates.AddRange(PlaybackRates.All);
+            RefreshTransportRatesList();
+            TransportRateAddNumberBox.Value = double.NaN;
+        }
+
+        private void RefreshTransportRatesList()
+        {
+            TransportRatesPanel.Children.Clear();
+
+            if (_editingTransportRates.Count == 0)
+                return;
+
+            double panelWidth = PreferencesContentPanel.ActualWidth;
+            if (panelWidth <= 0)
+                panelWidth = TransportRatesPanel.ActualWidth;
+            if (panelWidth <= 0)
+                panelWidth = 360;
+
+            const double chipWidth = 78;
+            int columns = Math.Clamp((int)Math.Floor(panelWidth / chipWidth), 3, 6);
+            int rows = (int)Math.Ceiling(_editingTransportRates.Count / (double)columns);
+
+            var grid = new Grid
+            {
+                ColumnSpacing = 6,
+                RowSpacing = 6,
+            };
+            for (int column = 0; column < columns; column++)
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (int row = 0; row < rows; row++)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            for (int index = 0; index < _editingTransportRates.Count; index++)
+            {
+                var chip = CreateTransportRateChip(_editingTransportRates[index]);
+                Grid.SetRow(chip, index / columns);
+                Grid.SetColumn(chip, index % columns);
+                grid.Children.Add(chip);
+            }
+
+            TransportRatesPanel.Children.Add(grid);
+        }
+
+        private Border CreateTransportRateChip(double rate)
+        {
+            bool isRequired = Math.Abs(rate - 1) < 0.001;
+
+            var chipGrid = new Grid
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            chipGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            chipGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            chipGrid.Children.Add(new TextBlock
+            {
+                Text = PlaybackRates.Format(rate),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Foreground = isRequired
+                    ? Application.Current.Resources["TextFillColorSecondaryBrush"] as Brush
+                    : Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush,
+            });
+
+            if (!isRequired)
+            {
+                var removeButton = new Button
+                {
+                    Content = "×",
+                    Tag = rate,
+                    Padding = new Thickness(4, 0, 0, 0),
+                    MinWidth = 22,
+                    MinHeight = 22,
+                    FontSize = 12,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                };
+                removeButton.Click += RemoveTransportRate_Click;
+                Grid.SetColumn(removeButton, 1);
+                chipGrid.Children.Add(removeButton);
+            }
+
+            return new Border
+            {
+                Padding = new Thickness(8, 4, 6, 4),
+                CornerRadius = new CornerRadius(4),
+                Background = isRequired
+                    ? Application.Current.Resources["ControlFillColorDefaultBrush"] as Brush
+                    : Application.Current.Resources["ControlFillColorSecondaryBrush"] as Brush,
+                Opacity = isRequired ? 0.9 : 1,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Child = chipGrid,
+            };
+        }
+
+        private void RemoveTransportRate_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: double rate })
+                return;
+
+            if (Math.Abs(rate - 1) < 0.001)
+                return;
+
+            _editingTransportRates.RemoveAll(item => Math.Abs(item - rate) < 0.001);
+            RefreshTransportRatesEditorUi();
+        }
+
+        private void AddTransportRate_Click(object sender, RoutedEventArgs e)
+        {
+            double rate = TransportRateAddNumberBox.Value;
+            if (double.IsNaN(rate) || rate < PlaybackRates.MinTransportRate || rate > PlaybackRates.MaxTransportRate)
+                return;
+
+            rate = Math.Round(rate, 2);
+            if (_editingTransportRates.Any(item => Math.Abs(item - rate) < 0.001))
+                return;
+
+            _editingTransportRates.Add(rate);
+            _editingTransportRates.Sort();
+            RefreshTransportRatesEditorUi();
+            TransportRateAddNumberBox.Value = double.NaN;
+        }
+
+        private void ResetTransportRates_Click(object sender, RoutedEventArgs e)
+        {
+            _editingTransportRates.Clear();
+            _editingTransportRates.AddRange(PlaybackRates.Defaults);
+            RefreshTransportRatesEditorUi();
+        }
+
+        private void RefreshTransportRatesEditorUi()
+        {
+            RefreshTransportRatesList();
+            RefreshHoldSpeedRateComboBoxesFromEditing();
+        }
+
+        private void RefreshHoldSpeedRateComboBoxesFromEditing()
+        {
+            double selectedBoost = GetSelectedHoldSpeedRate(
+                SpeedBoostRateComboBox,
+                LocalSettingsStore.DefaultSpeedBoostRate);
+            double selectedSlow = GetSelectedHoldSpeedRate(
+                SpeedSlowRateComboBox,
+                LocalSettingsStore.DefaultSpeedSlowRate);
+
+            PopulateHoldSpeedRateComboBoxes(_editingTransportRates);
+
+            SelectHoldSpeedRate(
+                SpeedBoostRateComboBox,
+                PlaybackRates.SnapBoostFromRates(selectedBoost, _editingTransportRates));
+            SelectHoldSpeedRate(
+                SpeedSlowRateComboBox,
+                PlaybackRates.SnapSlowFromRates(selectedSlow, _editingTransportRates));
+        }
+
+        private void ApplyTransportPlaybackRates()
+        {
+            var control = MixedMediaPlayer?.customMixedMediaPlayerControl;
+            if (control == null)
+                return;
+
+            double currentRate = 1.0;
+            try
+            {
+                currentRate = MixedMediaPlayer.MainMediaPlayer.MediaPlayer.PlaybackRate;
+            }
+            catch (COMException)
+            {
+            }
+
+            control.RebuildPlaybackRateFlyout(currentRate);
+        }
+
+        private void PopulateHoldSpeedRateComboBoxes(IEnumerable<double>? transportRates = null)
+        {
+            IEnumerable<double> rates = transportRates ?? PlaybackRates.All;
+
+            SpeedBoostRateComboBox.Items.Clear();
+            foreach (double rate in PlaybackRates.GetBoostRatesFrom(rates))
+                SpeedBoostRateComboBox.Items.Add(CreateHoldSpeedRateComboBoxItem(rate));
+
+            SpeedSlowRateComboBox.Items.Clear();
+            foreach (double rate in PlaybackRates.GetSlowRatesFrom(rates))
+                SpeedSlowRateComboBox.Items.Add(CreateHoldSpeedRateComboBoxItem(rate));
+        }
+
+        private static ComboBoxItem CreateHoldSpeedRateComboBoxItem(double rate) =>
+            new()
+            {
+                Content = PlaybackRates.Format(rate),
+                Tag = rate,
+            };
+
+        private static void SelectHoldSpeedRate(ComboBox comboBox, double rate)
+        {
+            for (int i = 0; i < comboBox.Items.Count; i++)
+            {
+                if (comboBox.Items[i] is ComboBoxItem { Tag: double itemRate }
+                    && Math.Abs(itemRate - rate) < 0.001)
+                {
+                    comboBox.SelectedIndex = i;
+                    return;
+                }
+            }
+
+            comboBox.SelectedIndex = comboBox.Items.Count > 0 ? 0 : -1;
+        }
+
+        private static double GetSelectedHoldSpeedRate(ComboBox comboBox, double fallback)
+        {
+            if (comboBox.SelectedItem is ComboBoxItem { Tag: double rate })
+                return rate;
+
+            return fallback;
         }
 
         private void MixedMediaPlayer_FullScreenToggleRequested(object sender, EventArgs e)
@@ -262,7 +543,7 @@ namespace TrackMixerv2
         }
         private void DeleteConfirmationFlyout_Opened(object sender, object e)
         {
-            MixedMediaPlayer.PauseAll();
+            _deleteFlyoutWasPlaying = PauseMediaIfPlaying();
         }
 
         private static async Task PlaybackKeyboardCheck(MixedMediaPlayer mixedMediaPlayer, Microsoft.UI.Dispatching.DispatcherQueue dispatcherQueue, CancellationToken cancellationToken)
@@ -303,9 +584,9 @@ namespace TrackMixerv2
                     dispatcherQueue.TryEnqueue(() =>
                     {
                         if (IsHoldChordActive(boostChord))
-                            mixedMediaPlayer.ChangePlaybackSpeed(2.0);
+                            mixedMediaPlayer.ChangePlaybackSpeed(LocalSettingsStore.GetSpeedBoostRate());
                         else if (IsHoldChordActive(slowChord))
-                            mixedMediaPlayer.ChangePlaybackSpeed(0.25);
+                            mixedMediaPlayer.ChangePlaybackSpeed(LocalSettingsStore.GetSpeedSlowRate());
                         else
                             mixedMediaPlayer.ChangePlaybackSpeed(1.0);
                     });
@@ -366,13 +647,11 @@ namespace TrackMixerv2
                 return;
             }
 
-            MixedMediaPlayer.PlayAll();
-            DeleteConfirmationFlyout.Hide();
+            ResumeMediaIfWasPlaying(_deleteFlyoutWasPlaying);
         }
 
         private void CancelDelete_Click(object sender, RoutedEventArgs e)
         {
-            MixedMediaPlayer.PlayAll();
             DeleteConfirmationFlyout.Hide();
         }
         private void PlaylistSubfolderToggle_Click(object sender, RoutedEventArgs e)
@@ -732,6 +1011,25 @@ namespace TrackMixerv2
             MixedMediaPlayer.PauseAll();
         }
 
+        public bool IsMediaPlaying() =>
+            MixedMediaPlayer.MainMediaPlayer.MediaPlayer.PlaybackSession.PlaybackState
+                == MediaPlaybackState.Playing;
+
+        public bool PauseMediaIfPlaying()
+        {
+            if (!IsMediaPlaying())
+                return false;
+
+            PauseMedia();
+            return true;
+        }
+
+        public void ResumeMediaIfWasPlaying(bool wasPlaying)
+        {
+            if (wasPlaying)
+                PlayMedia();
+        }
+
         private double GetSavedSliderValue(int index)
         {
             if (index < CachedSliderValues.Count)
@@ -1081,14 +1379,24 @@ namespace TrackMixerv2
 
         public async Task<bool> ShowRootFolderManagerAsync()
         {
-            RefreshRootFoldersDialog();
-            await RootFoldersDialog.ShowAsync();
-            return RootFolderStore.Folders.Count > 0;
+            var wasPlaying = PauseMediaIfPlaying();
+            try
+            {
+                RefreshRootFoldersDialog();
+                await RootFoldersDialog.ShowAsync();
+                return RootFolderStore.Folders.Count > 0;
+            }
+            finally
+            {
+                ResumeMediaIfWasPlaying(wasPlaying);
+            }
         }
 
         void RefreshRootFoldersDialog()
         {
             RootFolderStore.EnsureLoaded();
+            RootFolderEnvVarInfoText.Text =
+                $"Stored in the user environment variable {AppPaths.RootFoldersEnvVar} (semicolon-separated paths).";
             var folders = RootFolderStore.Folders.ToList();
             RootFolderList.ItemsSource = folders;
             bool hasFolders = folders.Count > 0;

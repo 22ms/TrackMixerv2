@@ -52,6 +52,57 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     }
 
     [Fact]
+    public void Hold_keybind_speed_rates_round_trip_through_disk()
+    {
+        LocalSettingsStore.SetSpeedBoostRate(3.5);
+        LocalSettingsStore.SetSpeedSlowRate(0.5);
+        LocalSettingsStore.ResetCache();
+
+        Assert.Equal(3.5, LocalSettingsStore.GetSpeedBoostRate());
+        Assert.Equal(0.5, LocalSettingsStore.GetSpeedSlowRate());
+        Assert.Equal("Speed boost 3.5× (hold)", KeybindStore.GetActionLabel(KeybindAction.SpeedBoost));
+        Assert.Equal("Slow motion 0.5× (hold)", KeybindStore.GetActionLabel(KeybindAction.SpeedSlow));
+    }
+
+    [Fact]
+    public void Custom_transport_rates_round_trip_through_disk()
+    {
+        LocalSettingsStore.SetTransportRates(new[] { 0.5, 1, 2.5, 4 });
+        LocalSettingsStore.ResetCache();
+
+        Assert.Equal(new[] { 0.5, 1.0, 2.5, 4.0 }, LocalSettingsStore.GetTransportRates());
+        Assert.Equal(new[] { 2.5, 4.0 }, PlaybackRates.BoostRates.ToArray());
+    }
+
+    [Fact]
+    public void Reset_transport_rates_restores_defaults()
+    {
+        LocalSettingsStore.SetTransportRates(new[] { 0.5, 1, 4 });
+        LocalSettingsStore.ResetTransportRates();
+        LocalSettingsStore.ResetCache();
+
+        Assert.Equal(PlaybackRates.Defaults, LocalSettingsStore.GetTransportRates());
+    }
+
+    [Theory]
+    [InlineData(0.1, 1.25)]
+    [InlineData(10, 8)]
+    public void Hold_keybind_speed_rates_snap_to_transport_speeds(double boostInput, double expectedBoost)
+    {
+        LocalSettingsStore.SetSpeedBoostRate(boostInput);
+        Assert.Equal(expectedBoost, LocalSettingsStore.GetSpeedBoostRate());
+    }
+
+    [Theory]
+    [InlineData(0.1, 0.25)]
+    [InlineData(1, 0.75)]
+    public void Hold_keybind_slow_rates_snap_to_transport_speeds(double slowInput, double expectedSlow)
+    {
+        LocalSettingsStore.SetSpeedSlowRate(slowInput);
+        Assert.Equal(expectedSlow, LocalSettingsStore.GetSpeedSlowRate());
+    }
+
+    [Fact]
     public void FilterExistingPaths_removes_missing_files()
     {
         string existing = Path.Combine(Path.GetTempPath(), "TrackMixer-existing-" + Guid.NewGuid().ToString("N") + ".mp4");
