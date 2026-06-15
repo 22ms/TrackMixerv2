@@ -858,7 +858,6 @@ namespace TrackMixerv2
             var volumeSlider = new Slider
             {
                 IsTabStop = false,
-                AllowFocusOnInteraction = false,
                 UseSystemFocusVisuals = false,
                 Margin = margin,
                 TickFrequency = 5,

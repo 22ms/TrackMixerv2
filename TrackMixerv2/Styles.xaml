@@ -161,8 +161,6 @@
                                         Value="{ThemeResource MediaTransportControlsAppBarButtonHeight}" />
                                 <Setter Property="Width"
                                         Value="{ThemeResource MediaTransportControlsAppBarButtonWidth}" />
-                                <Setter Property="AllowFocusOnInteraction"
-                                        Value="False" />
                             </Style>
                             <!-- New AppBarToggle button style 40x40 pixels in size -->
                             <Style x:Key="AppBarToggleButtonStyle"
@@ -172,8 +170,6 @@
                                         Value="{ThemeResource MediaTransportControlsAppBarButtonHeight}" />
                                 <Setter Property="Width"
                                         Value="{ThemeResource MediaTransportControlsAppBarButtonWidth}" />
-                                <Setter Property="AllowFocusOnInteraction"
-                                        Value="False" />
                             </Style>
                             <!-- New CommandBar Style -->
                             <Style x:Key="CommandBarStyle"
@@ -489,7 +485,6 @@
                                                     Height="{ThemeResource MediaTransportControlsSliderHeight}"
                                                     VerticalAlignment="Center"
                                                     IsThumbToolTipEnabled="False"
-                                                    AllowFocusOnInteraction="False"
                                                     IsTabStop="False" />
                                             <ProgressBar x:Name="BufferingProgressBar"
                                                          Height="4"
@@ -678,7 +673,6 @@
                                                                         Margin="8,0"
                                                                         HorizontalAlignment="Stretch"
                                                                         IsThumbToolTipEnabled="False"
-                                                                        AllowFocusOnInteraction="False"
                                                                         IsTabStop="False"
                                                                         LargeChange="1"
                                                                         Maximum="1"
@@ -793,7 +787,6 @@
                                     </CommandBar>
                                     <Slider x:Name="VolumeSlider"
                                             Visibility="Collapsed"
-                                            AllowFocusOnInteraction="False"
                                             IsTabStop="False"
                                             Value="50" />
                                     </Grid>
