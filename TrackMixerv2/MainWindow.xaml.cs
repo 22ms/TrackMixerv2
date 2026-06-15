@@ -1061,6 +1061,8 @@ namespace TrackMixerv2
                 if (child is Control control)
                 {
                     control.IsTabStop = false;
+                    if (control is Slider)
+                        control.AllowFocusOnInteraction = false;
                 }
 
                 DisableTabStops(child);

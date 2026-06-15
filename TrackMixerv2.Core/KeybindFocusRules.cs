@@ -110,10 +110,6 @@ public static class KeybindFocusRules
         if (kind == FocusedControlKind.TextEntry)
             return true;
 
-        // Arrows move the slider thumb; don't steal them globally.
-        if (kind == FocusedControlKind.Slider && IsSliderNavigationKey(virtualKey))
-            return true;
-
         return false;
     }
 

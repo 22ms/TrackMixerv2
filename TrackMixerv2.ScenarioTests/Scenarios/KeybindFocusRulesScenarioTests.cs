@@ -103,10 +103,11 @@ public sealed class KeybindFocusRulesScenarioTests
     // Dialog always defers
     [InlineData(FocusedControlKind.Dialog, 0x20, 0, true)]
     [InlineData(FocusedControlKind.Dialog, 0x27, 2, true)]
-    // Slider defers for navigation arrows but NOT for Space
-    [InlineData(FocusedControlKind.Slider, 0x25, 0, true)]   // Left arrow
-    [InlineData(FocusedControlKind.Slider, 0x27, 0, true)]   // Right arrow
-    [InlineData(FocusedControlKind.Slider, 0x20, 0, false)]  // Space: PlayPause works on slider
+    // Sliders can no longer receive focus (AllowFocusOnInteraction=False), so the
+    // Slider branch was removed from ShouldDeferGlobalMediaKeybind — all keys pass through.
+    [InlineData(FocusedControlKind.Slider, 0x25, 0, false)]  // Left arrow passes through
+    [InlineData(FocusedControlKind.Slider, 0x27, 0, false)]  // Right arrow passes through
+    [InlineData(FocusedControlKind.Slider, 0x20, 0, false)]  // Space passes through
     // Selector: Tab is now intercepted globally and AllowFocusOnInteraction is False on
     // transport buttons, so selectors can no longer receive focus.  The Selector branch
     // was removed from ShouldDeferGlobalMediaKeybind — all keys pass through.

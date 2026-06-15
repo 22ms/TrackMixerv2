@@ -488,7 +488,9 @@
                                                     MinWidth="80"
                                                     Height="{ThemeResource MediaTransportControlsSliderHeight}"
                                                     VerticalAlignment="Center"
-                                                    IsThumbToolTipEnabled="False" />
+                                                    IsThumbToolTipEnabled="False"
+                                                    AllowFocusOnInteraction="False"
+                                                    IsTabStop="False" />
                                             <ProgressBar x:Name="BufferingProgressBar"
                                                          Height="4"
                                                          IsIndeterminate="True"
@@ -676,6 +678,8 @@
                                                                         Margin="8,0"
                                                                         HorizontalAlignment="Stretch"
                                                                         IsThumbToolTipEnabled="False"
+                                                                        AllowFocusOnInteraction="False"
+                                                                        IsTabStop="False"
                                                                         LargeChange="1"
                                                                         Maximum="1"
                                                                         Minimum="0"
@@ -789,6 +793,8 @@
                                     </CommandBar>
                                     <Slider x:Name="VolumeSlider"
                                             Visibility="Collapsed"
+                                            AllowFocusOnInteraction="False"
+                                            IsTabStop="False"
                                             Value="50" />
                                     </Grid>
                                 </Border>
