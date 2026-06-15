@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 
 namespace TrackMixerv2;
@@ -30,10 +31,7 @@ public static class KeybindApplicator
             new KeyEventHandler((sender, args) => HandleMainWindowKeyUp(window, args)),
             true);
 
-        // Tab navigation is disabled application-wide until a proper keyboard-navigation
-        // UX has been designed (see BACKLOG.md). Without this intercept, pressing Tab moves
-        // focus to transport buttons invisibly; a subsequent Space then activates that
-        // button (e.g. Next Track) instead of toggling play/pause.
+        // Tab key interceptor — belt-and-suspenders alongside the GettingFocus guard below.
         window.RootGrid.AddHandler(
             UIElement.KeyDownEvent,
             new KeyEventHandler((_, args) =>
@@ -43,7 +41,37 @@ public static class KeybindApplicator
             }),
             true);
 
+        // Blanket focus guard: cancel every focus transition except to text-input
+        // controls (where the user needs to type) and ContentDialog descendants
+        // (where WinUI needs focus to drive dialog keyboard behaviour).
+        //
+        // This is the most reliable way to stop any control — slider, button,
+        // tab header, list item — from silently stealing keyboard focus on click,
+        // without having to set AllowFocusOnInteraction on every element.
+        // See BACKLOG.md for the plan to replace this with a proper focus model.
+        FocusManager.GettingFocus += (_, e) =>
+        {
+            if (e.NewFocusedElement is TextBox or AutoSuggestBox or PasswordBox or NumberBox)
+                return;
+
+            if (IsInsideDialog(e.NewFocusedElement as DependencyObject))
+                return;
+
+            e.TryCancel();
+        };
+
         _mainWindowHooked = true;
+    }
+
+    private static bool IsInsideDialog(DependencyObject? element)
+    {
+        while (element != null)
+        {
+            if (element is ContentDialog)
+                return true;
+            element = VisualTreeHelper.GetParent(element);
+        }
+        return false;
     }
 
     private static void HandleMainWindowKeyUp(MainWindow window, KeyRoutedEventArgs args)
