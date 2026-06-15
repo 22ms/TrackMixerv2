@@ -162,7 +162,7 @@
                                 <Setter Property="Width"
                                         Value="{ThemeResource MediaTransportControlsAppBarButtonWidth}" />
                                 <Setter Property="AllowFocusOnInteraction"
-                                        Value="True" />
+                                        Value="False" />
                             </Style>
                             <!-- New AppBarToggle button style 40x40 pixels in size -->
                             <Style x:Key="AppBarToggleButtonStyle"
@@ -173,7 +173,7 @@
                                 <Setter Property="Width"
                                         Value="{ThemeResource MediaTransportControlsAppBarButtonWidth}" />
                                 <Setter Property="AllowFocusOnInteraction"
-                                        Value="True" />
+                                        Value="False" />
                             </Style>
                             <!-- New CommandBar Style -->
                             <Style x:Key="CommandBarStyle"
@@ -371,13 +371,20 @@
                             </VisualStateGroup>
                             <!-- PlayPause states -->
                             <VisualStateGroup x:Name="PlayPauseStates">
-                                <VisualState x:Name="PlayState" />
+                                <VisualState x:Name="PlayState">
+                                    <VisualState.Setters>
+                                        <Setter Target="PlayPauseButton.(AutomationProperties.Name)" Value="Play" />
+                                        <Setter Target="PlayPauseButtonOnLeft.(AutomationProperties.Name)" Value="Play" />
+                                    </VisualState.Setters>
+                                </VisualState>
                                 <VisualState x:Name="PauseState">
                                     <VisualState.Setters>
                                         <Setter Target="PlayPauseSymbolLeft.Glyph"
                                                 Value="&#xF8AE;" />
                                         <Setter Target="PlayPauseSymbol.Glyph"
                                                 Value="&#xF8AE;" />
+                                        <Setter Target="PlayPauseButton.(AutomationProperties.Name)" Value="Pause" />
+                                        <Setter Target="PlayPauseButtonOnLeft.(AutomationProperties.Name)" Value="Pause" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
@@ -570,7 +577,8 @@
                                                       Style="{StaticResource AppBarButtonStyle}"
                                                       MediaTransportControlsHelper.DropoutOrder="23"
                                                       HorizontalAlignment="Center"
-                                                      VerticalAlignment="Center">
+                                                      VerticalAlignment="Center"
+                                                      AutomationProperties.AutomationId="PlayPauseButton">
                                             <AppBarButton.Resources>
                                                 <Thickness x:Key="AppBarButtonInnerBorderMargin">5</Thickness>
                                                 <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>

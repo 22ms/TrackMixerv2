@@ -10,8 +10,10 @@ public sealed class KeybindFocusRulesScenarioTests
     [InlineData(FocusedControlKind.Slider, 0x27, 0, true)]
     [InlineData(FocusedControlKind.Slider, 0x20, 0, false)]
     [InlineData(FocusedControlKind.Slider, 0x25, 2, false)]
-    [InlineData(FocusedControlKind.Button, 0x20, 0, true)]
-    [InlineData(FocusedControlKind.Button, 0x0D, 0, true)]
+    // Buttons can no longer receive keyboard focus (AllowFocusOnInteraction = False),
+    // so the Button activation case was removed from ShouldDeferToFocusedControl.
+    [InlineData(FocusedControlKind.Button, 0x20, 0, false)]
+    [InlineData(FocusedControlKind.Button, 0x0D, 0, false)]
     [InlineData(FocusedControlKind.Button, 0x25, 0, false)]
     [InlineData(FocusedControlKind.TextEntry, 0x41, 0, true)]
     [InlineData(FocusedControlKind.TextEntry, 0x41, 2, false)]
@@ -88,5 +90,61 @@ public sealed class KeybindFocusRulesScenarioTests
             FocusedControlKind.Dialog,
             0x20,
             modifiers: KeybindFocusRules.ModifierControl));
+    }
+
+    // -------------------------------------------------------------------------
+    // ShouldDeferGlobalMediaKeybind – window-level permissive policy
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    // TextEntry always defers
+    [InlineData(FocusedControlKind.TextEntry, 0x20, 0, true)]
+    [InlineData(FocusedControlKind.TextEntry, 0x27, 0, true)]
+    // Dialog always defers
+    [InlineData(FocusedControlKind.Dialog, 0x20, 0, true)]
+    [InlineData(FocusedControlKind.Dialog, 0x27, 2, true)]
+    // Slider defers for navigation arrows but NOT for Space
+    [InlineData(FocusedControlKind.Slider, 0x25, 0, true)]   // Left arrow
+    [InlineData(FocusedControlKind.Slider, 0x27, 0, true)]   // Right arrow
+    [InlineData(FocusedControlKind.Slider, 0x20, 0, false)]  // Space: PlayPause works on slider
+    // Selector: Tab is now intercepted globally and AllowFocusOnInteraction is False on
+    // transport buttons, so selectors can no longer receive focus.  The Selector branch
+    // was removed from ShouldDeferGlobalMediaKeybind — all keys pass through.
+    [InlineData(FocusedControlKind.Selector, 0x25, 0, false)] // Left arrow passes through
+    [InlineData(FocusedControlKind.Selector, 0x27, 0, false)] // Right arrow passes through
+    [InlineData(FocusedControlKind.Selector, 0x20, 0, false)] // Space passes through
+    // Button, Other, None: media keys always pass through
+    [InlineData(FocusedControlKind.Button, 0x20, 0, false)]
+    [InlineData(FocusedControlKind.Button, 0x25, 0, false)]
+    [InlineData(FocusedControlKind.Other, 0x20, 0, false)]
+    [InlineData(FocusedControlKind.None, 0x27, 0, false)]
+    // Modified chords always pass through regardless of focus kind
+    [InlineData(FocusedControlKind.Selector, 0x27, 2, false)]
+    [InlineData(FocusedControlKind.TextEntry, 0x27, 2, false)]
+    public void ShouldDeferGlobalMediaKeybind_applies_permissive_policy(
+        FocusedControlKind kind,
+        int virtualKey,
+        int modifiers,
+        bool expectedDefer)
+    {
+        Assert.Equal(expectedDefer,
+            KeybindFocusRules.ShouldDeferGlobalMediaKeybind(kind, virtualKey, modifiers));
+    }
+
+    [Fact]
+    public void ShouldDeferGlobalMediaKeybind_local_policy_still_defers_selector_space_even_though_global_does_not()
+    {
+        const int space = 0x20;
+
+        // Local (page-level) policy still defers Space on a Selector via
+        // IsSelectorNavigationKey — this is fine because Selectors can no longer
+        // receive keyboard focus (Tab intercepted, AllowFocusOnInteraction = False).
+        Assert.True(KeybindFocusRules.ShouldDeferToFocusedControl(
+            FocusedControlKind.Selector, space, modifiers: 0));
+
+        // Global (window-level) policy no longer defers Selectors at all — the
+        // Selector branch was removed since selectors cannot get focus.
+        Assert.False(KeybindFocusRules.ShouldDeferGlobalMediaKeybind(
+            FocusedControlKind.Selector, space, modifiers: 0));
     }
 }

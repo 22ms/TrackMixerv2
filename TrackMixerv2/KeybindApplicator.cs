@@ -16,15 +16,33 @@ public static class KeybindApplicator
         if (_mainWindowHooked)
             return;
 
+        // handledEventsToo: true so that global media keys (Space, arrow seek) reach
+        // HandleMainWindowKey even when a child element such as a TabViewItem has
+        // already consumed the event for its own navigation.  The handler itself
+        // checks args.Handled before doing anything that could double-fire.
         window.RootGrid.AddHandler(
             UIElement.KeyDownEvent,
             new KeyEventHandler((sender, args) => HandleMainWindowKey(window, args)),
-            false);
+            true);
 
         window.RootGrid.AddHandler(
             UIElement.KeyUpEvent,
             new KeyEventHandler((sender, args) => HandleMainWindowKeyUp(window, args)),
             true);
+
+        // Tab navigation is disabled application-wide until a proper keyboard-navigation
+        // UX has been designed (see BACKLOG.md). Without this intercept, pressing Tab moves
+        // focus to transport buttons invisibly; a subsequent Space then activates that
+        // button (e.g. Next Track) instead of toggling play/pause.
+        window.RootGrid.AddHandler(
+            UIElement.KeyDownEvent,
+            new KeyEventHandler((_, args) =>
+            {
+                if (args.Key == VirtualKey.Tab)
+                    args.Handled = true;
+            }),
+            true);
+
         _mainWindowHooked = true;
     }
 
@@ -70,18 +88,61 @@ public static class KeybindApplicator
         if (TryHandleEscapeExitFullscreen(window, args))
             return;
 
-        if (!ShouldHandleKeybind(window.RootGrid, args))
+        // Window-scoped actions (F11, tab management) only run when no child element
+        // has already claimed the event and focus policy allows it.
+        if (ShouldHandleKeybind(window.RootGrid, args))
+        {
+            if (TryHandleMainWindowAction(window, KeybindAction.ToggleFullscreen, args))
+                return;
+            if (TryHandleMainWindowAction(window, KeybindAction.NewTab, args))
+                return;
+            if (TryHandleMainWindowAction(window, KeybindAction.CloseTab, args))
+                return;
+            if (TryHandleMainWindowAction(window, KeybindAction.NextTab, args))
+                return;
+            if (TryHandleMainWindowAction(window, KeybindAction.PreviousTab, args))
+                return;
+        }
+
+        // Media keys (PlayPause, Rewind, FastForward) are dispatched globally so they
+        // work even when focus is on the TabView header or another non-MixerPage element.
+        TryDispatchGlobalMediaKey(window, args);
+    }
+
+    /// <summary>
+    /// Routes media keybinds to the active MixerPage using a permissive focus policy.
+    /// This runs at the window level so keys work even when the TabView header has focus.
+    /// </summary>
+    private static void TryDispatchGlobalMediaKey(MainWindow window, KeyRoutedEventArgs args)
+    {
+        if (window.ActiveMixerPage == null || KeybindRecordingGate.IsRecording)
             return;
 
-        if (TryHandleMainWindowAction(window, KeybindAction.ToggleFullscreen, args))
+        if (IsModifierKey(args.Key))
             return;
-        if (TryHandleMainWindowAction(window, KeybindAction.NewTab, args))
+
+        DependencyObject? focused = FocusManager.GetFocusedElement(window.RootGrid.XamlRoot) as DependencyObject;
+        FocusedControlKind kind = focused == null
+            ? FocusedControlKind.None
+            : KeybindFocusPolicy.Classify(focused);
+
+        int modifiers = KeybindChordCapture.GetCurrentModifiers();
+
+        // If a child element already handled the event (e.g. the page-level keybind
+        // handler dispatched PlayPause first), skip — the debounce in PlayPauseFromKeybind
+        // would catch a double-dispatch anyway, but it is cleaner not to re-enter.
+        if (args.Handled)
             return;
-        if (TryHandleMainWindowAction(window, KeybindAction.CloseTab, args))
+
+        if (KeybindFocusRules.ShouldDeferGlobalMediaKeybind(kind, (int)args.Key, modifiers))
             return;
-        if (TryHandleMainWindowAction(window, KeybindAction.NextTab, args))
+
+        MixerPage page = window.ActiveMixerPage;
+        if (TryHandleMixerPageAction(page, KeybindAction.PlayPause, args))
             return;
-        TryHandleMainWindowAction(window, KeybindAction.PreviousTab, args);
+        if (TryHandleMixerPageAction(page, KeybindAction.Rewind, args))
+            return;
+        TryHandleMixerPageAction(page, KeybindAction.FastForward, args);
     }
 
     private static void HandleMixerPageKey(MixerPage page, KeyRoutedEventArgs args)

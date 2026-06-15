@@ -3,6 +3,7 @@ using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
 using System.Diagnostics;
+using System.Threading;
 using TrackMixerv2;
 
 namespace TrackMixerv2.UITests.Infrastructure;
@@ -163,6 +164,59 @@ public sealed class TrackMixerAppSession : IDisposable
 
     public bool MixerPageIsLoaded() => FindByAutomationId("RatingSlider") != null;
 
+    /// <summary>
+    /// Invokes the central play/pause button in the media transport controls.
+    /// </summary>
+    public void ClickPlayPause()
+    {
+        var btn = FindByAutomationId("PlayPauseButton")?.AsButton()
+            ?? throw new InvalidOperationException("PlayPauseButton not found in the automation tree.");
+        btn.Invoke();
+    }
+
+    /// <summary>
+    /// Returns true when the transport controls report the player is in the playing state.
+    /// The PlayPauseButton accessible name is set to "Pause" (the action that would stop it)
+    /// when media is actively playing, and "Play" when paused.
+    /// </summary>
+    public bool IsPlaying()
+    {
+        var btn = FindByAutomationId("PlayPauseButton");
+        if (btn == null)
+            return false;
+        string name = btn.Properties.Name.ValueOrDefault ?? string.Empty;
+        return name.Equals("Pause", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Ensures the player is paused. If it is currently playing, clicks pause and waits.
+    /// </summary>
+    public void EnsurePaused()
+    {
+        if (!IsPlaying())
+            return;
+        ClickPlayPause();
+        UiWait.UntilTrue(() => !IsPlaying(), TimeSpan.FromSeconds(10), "player to reach paused state");
+    }
+
+    /// <summary>
+    /// Minimizes the main window to simulate the application losing foreground focus.
+    /// </summary>
+    public void MinimizeWindow()
+    {
+        MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Minimized);
+    }
+
+    /// <summary>
+    /// Restores the main window from a minimized state and brings it to the foreground.
+    /// </summary>
+    public void RestoreWindow()
+    {
+        MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+        Thread.Sleep(300);
+        MainWindow.Focus();
+    }
+
     public void ClickKeybindCell(string action)
     {
         // The cell is a Border (not surfaced in the UIA control view), but its content is
@@ -201,6 +255,28 @@ public sealed class TrackMixerAppSession : IDisposable
 
         int listItems = tabView.FindAllDescendants(Automation.ConditionFactory.ByControlType(ControlType.ListItem)).Length;
         return listItems;
+    }
+
+    /// <summary>
+    /// Clicks the first tab header item in the TabView, moving keyboard focus away from
+    /// the player area. This simulates the common state where a user has interacted with
+    /// the tab strip rather than the media controls.
+    /// </summary>
+    public void ClickTabHeader()
+    {
+        var tabView = FindByAutomationId("MainTabView")
+            ?? throw new InvalidOperationException("MainTabView not found.");
+
+        AutomationElement[] items =
+            tabView.FindAllDescendants(Automation.ConditionFactory.ByControlType(ControlType.TabItem));
+
+        if (items.Length == 0)
+            items = tabView.FindAllDescendants(Automation.ConditionFactory.ByControlType(ControlType.ListItem));
+
+        if (items.Length == 0)
+            throw new InvalidOperationException("No tab items found inside MainTabView.");
+
+        items[0].Click();
     }
 
     public void Dispose()

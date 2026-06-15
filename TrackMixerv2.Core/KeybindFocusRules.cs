@@ -34,7 +34,6 @@ public static class KeybindFocusRules
         {
             FocusedControlKind.TextEntry => true,
             FocusedControlKind.Slider => IsSliderNavigationKey(virtualKey),
-            FocusedControlKind.Button => IsButtonActivationKey(virtualKey),
             FocusedControlKind.Menu => IsMenuNavigationKey(virtualKey),
             FocusedControlKind.ComboBox => IsComboBoxNavigationKey(virtualKey),
             FocusedControlKind.Selector => IsSelectorNavigationKey(virtualKey),
@@ -87,6 +86,34 @@ public static class KeybindFocusRules
         }
 
         error = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a global (window-level) media keybind should defer to the focused control.
+    ///
+    /// More permissive than <see cref="ShouldDeferToFocusedControl"/>: only text entry
+    /// controls and modal dialogs block media keys; sliders still own their arrow keys.
+    /// </summary>
+    public static bool ShouldDeferGlobalMediaKeybind(FocusedControlKind kind, int virtualKey, int modifiers)
+    {
+        // Modal dialogs always win, even with modifiers.
+        if (kind == FocusedControlKind.Dialog)
+            return true;
+
+        // Modified chords (Ctrl/Alt/Shift+key) are user-defined shortcuts; they pass
+        // through even from text boxes.
+        if (modifiers != 0)
+            return false;
+
+        // Bare keys in a text box belong to the text box.
+        if (kind == FocusedControlKind.TextEntry)
+            return true;
+
+        // Arrows move the slider thumb; don't steal them globally.
+        if (kind == FocusedControlKind.Slider && IsSliderNavigationKey(virtualKey))
+            return true;
+
         return false;
     }
 

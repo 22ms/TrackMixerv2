@@ -65,16 +65,31 @@ namespace TrackMixerv2
             if (_isDisposing)
                 return;
 
-            if (sender.CurrentState == MediaPlayerState.Playing)
+            // This event fires on a background thread. XAML elements (MainMediaPlayer is a
+            // MediaPlayerElement) and DispatcherQueueTimer must only be touched on the UI
+            // thread, or they throw COMException (E_WRONG_THREAD) which is silently swallowed.
+            // Capture the state here (MediaPlayer itself is thread-safe) and dispatch all work.
+            MediaPlayerState state;
+            try { state = sender.CurrentState; }
+            catch (COMException) { return; }
+
+            dispatcherQueue.TryEnqueue(() =>
             {
-                SyncTrackPlayersToMain(force: true);
-                StartAuxiliaryTracks();
-                StartSyncTimer();
-            }
-            else if (sender.CurrentState == MediaPlayerState.Paused)
-            {
-                StopSyncTimer();
-            }
+                if (_isDisposing)
+                    return;
+
+                if (state == MediaPlayerState.Playing)
+                {
+                    SyncTrackPlayersToMain(force: true);
+                    StartAuxiliaryTracks();
+                    StartSyncTimer();
+                }
+                else
+                {
+                    StopSyncTimer();
+                    PauseAuxiliaryTracks();
+                }
+            });
         }
 
         private void MediaPlayer_MediaPlayerRateChanged(MediaPlayer sender, MediaPlayerRateChangedEventArgs args)
@@ -312,11 +327,13 @@ namespace TrackMixerv2
                                         return;
 
                                     SyncTrackPlayersToMain(force: true);
-                                    StartAuxiliaryTracks();
                                     List<MediaPlayer> list = new List<MediaPlayer>();
                                     list.Add(MainMediaPlayer.MediaPlayer);
                                     list.AddRange(GetAuxiliaryTrackSnapshot());
+                                    // Fire MediaLoaded first so the handler can apply preset
+                                    // volumes before any auxiliary track begins playing.
                                     MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
+                                    StartAuxiliaryTracks();
                                 });
                             }
                         });
@@ -368,7 +385,12 @@ namespace TrackMixerv2
 
         private void MediaPlayer_SeekCompleted(MediaPlayer sender, object args)
         {
-            SyncTrackPlayersToMain(force: true);
+            // SeekCompleted also fires on a background thread.
+            dispatcherQueue.TryEnqueue(() =>
+            {
+                if (!_isDisposing)
+                    SyncTrackPlayersToMain(force: true);
+            });
         }
 
         private void SystemMediaTransportControls_ButtonPressed(SystemMediaTransportControls sender, SystemMediaTransportControlsButtonPressedEventArgs args)
@@ -425,15 +447,22 @@ namespace TrackMixerv2
         {
             SyncTrackPlayersToMain(force: true);
             MainMediaPlayer.MediaPlayer.Play();
-            StartAuxiliaryTracks();
+            // Start aux tracks immediately without waiting for the async state transition.
+            // MediaPlayer_CurrentStateChanged (dispatched to UI thread) will also call
+            // StartAuxiliaryTracks once the Playing state is confirmed, which is idempotent.
+            ForEachAuxiliaryTrack(trackPlayer =>
+            {
+                try { trackPlayer.Play(); }
+                catch (COMException) { }
+            });
             StartSyncTimer();
         }
 
         public void PauseAll()
         {
             StopSyncTimer();
+            PauseAuxiliaryTracks();
             MainMediaPlayer.MediaPlayer.Pause();
-            ForEachAuxiliaryTrack(trackPlayer => trackPlayer.Pause());
         }
 
         public void SetFullScreenButtonState(bool isFullScreen)
@@ -642,6 +671,58 @@ namespace TrackMixerv2
             mediaPlayer.Position = newPosition;
         }
 
+        private IReadOnlyList<MediaPlayer> GetAuxiliaryTrackSnapshot() => TrackPlayers.ToList();
+
+        private void ForEachAuxiliaryTrack(Action<MediaPlayer> action)
+        {
+            foreach (MediaPlayer trackPlayer in GetAuxiliaryTrackSnapshot())
+                action(trackPlayer);
+        }
+
+        private void PauseAuxiliaryTracks()
+        {
+            ForEachAuxiliaryTrack(trackPlayer =>
+            {
+                try
+                {
+                    trackPlayer.Pause();
+                }
+                catch (COMException)
+                {
+                }
+            });
+        }
+
+        private void StartAuxiliaryTracks()
+        {
+            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+                return;
+
+            MediaPlayerState mainState;
+            try
+            {
+                mainState = mainPlayer.CurrentState;
+            }
+            catch (COMException)
+            {
+                return;
+            }
+
+            if (mainState != MediaPlayerState.Playing)
+                return;
+
+            ForEachAuxiliaryTrack(trackPlayer =>
+            {
+                try
+                {
+                    trackPlayer.Play();
+                }
+                catch (COMException)
+                {
+                }
+            });
+        }
+
         private void AlignTrackPlayerToMain(MediaPlayer trackPlayer)
         {
             if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
@@ -689,45 +770,6 @@ namespace TrackMixerv2
                 {
                 }
             }
-        }
-
-        private IReadOnlyList<MediaPlayer> GetAuxiliaryTrackSnapshot() => TrackPlayers.ToList();
-
-        private void ForEachAuxiliaryTrack(Action<MediaPlayer> action)
-        {
-            foreach (MediaPlayer trackPlayer in GetAuxiliaryTrackSnapshot())
-                action(trackPlayer);
-        }
-
-        private void StartAuxiliaryTracks()
-        {
-            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
-                return;
-
-            MediaPlayerState mainState;
-            try
-            {
-                mainState = mainPlayer.CurrentState;
-            }
-            catch (COMException)
-            {
-                return;
-            }
-
-            if (mainState != MediaPlayerState.Playing)
-                return;
-
-            ForEachAuxiliaryTrack(trackPlayer =>
-            {
-                try
-                {
-                    if (trackPlayer.CurrentState != MediaPlayerState.Playing)
-                        trackPlayer.Play();
-                }
-                catch (COMException)
-                {
-                }
-            });
         }
 
         private async Task TryAdvancePastUnavailableMediaAsync(string? unavailablePath)
@@ -815,6 +857,7 @@ namespace TrackMixerv2
             OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, timeMillis);
             ForEachAuxiliaryTrack(trackPlayer => OffsetMediaPlayerPlaybackPosition(trackPlayer, timeMillis));
         }
+
         public void Rewind(int timeMillis)
         {
             OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, -timeMillis);

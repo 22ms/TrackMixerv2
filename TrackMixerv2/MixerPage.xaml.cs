@@ -696,7 +696,13 @@ namespace TrackMixerv2
         public void OpenNewMedia(string path)
         {
             this.path = path;
+            // Load saved metadata for the new path so CachedSliderValues reflects
+            // the correct track volumes before the media player opens the file.
+            LoadMetadata(path);
             MixedMediaPlayer.Dispose();
+            // Pre-apply the saved main-track volume so the player never starts at 100%
+            // and snaps to the preset only after all auxiliary tracks have loaded.
+            MixedMediaPlayer.SetVolume(0, GetSavedSliderValue(0));
             MixedMediaPlayer.OpenMediaAsync(path);
         }
 
@@ -715,6 +721,10 @@ namespace TrackMixerv2
                 if (initialLoaded) return;
                 if (tabViewItem == null)
                     tabViewItem = Parent as TabViewItem;
+                // Pre-apply the saved volume so the main track never audibly starts
+                // at 100% before the MediaLoaded handler runs.  CachedSliderValues is
+                // already populated by the constructor's LoadMetadata call.
+                MixedMediaPlayer.SetVolume(0, GetSavedSliderValue(0));
                 MixedMediaPlayer.OpenMediaAsync(path);
                 MixedMediaPlayer.MediaLoaded += MixedMediaPlayer_MediaLoaded;
                 MixedMediaPlayer.MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
@@ -1047,8 +1057,23 @@ namespace TrackMixerv2
                 return 100;
             }
         }
+        private long _lastPlayPauseKeybindTick = 0;
+
         internal void PlayPauseFromKeybind(KeyboardAccelerator? sender, KeyboardAcceleratorInvokedEventArgs? args)
         {
+            // De-bounce: the window-level and page-level keybind handlers can both reach
+            // this method for the same physical key press (e.g. Space on a TabViewItem whose
+            // consumed event we override at the window level). Ignore calls within 50 ms of
+            // the previous one so the state does not double-toggle.
+            long now = Environment.TickCount64;
+            long last = System.Threading.Interlocked.Read(ref _lastPlayPauseKeybindTick);
+            if (now - last < 50)
+            {
+                args?.Handled = true;
+                return;
+            }
+            System.Threading.Interlocked.Exchange(ref _lastPlayPauseKeybindTick, now);
+
             if (MixedMediaPlayer.MainMediaPlayer.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing)
                 MixedMediaPlayer.PauseAll();
             else
