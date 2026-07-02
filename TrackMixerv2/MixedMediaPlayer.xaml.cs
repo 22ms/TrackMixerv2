@@ -297,9 +297,13 @@ namespace TrackMixerv2
                         int currentIndex = i;
                         MediaPlayer mediaPlayer = new MediaPlayer();
                         mediaPlayer.AutoPlay = false;
-                        MediaSource source = MediaSource.CreateFromStorageFile(file);
-                        MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
-                        mediaPlayer.Source = mainPlaybackItem;
+                        // Auxiliary players only exist to play one extra audio track. Without
+                        // this, they build a full video pipeline with no render target, which
+                        // decodes the video once per track and can stall the player entirely
+                        // (never leaves Paused) depending on container/codec.
+                        mediaPlayer.IsVideoFrameServerEnabled = true;
+                        mediaPlayer.MediaFailed += (failedPlayer, failedArgs) =>
+                            Trace.WriteLine($"Auxiliary track {currentIndex} failed: {failedArgs.Error} {failedArgs.ExtendedErrorCode?.Message}");
                         MediaOpened.Add(false);
                         var trackOpenedHandler = new TypedEventHandler<MediaPlayer, object>((trackPlayer, o) =>
                         {
@@ -338,7 +342,10 @@ namespace TrackMixerv2
                             }
                         });
                         TrackOpenedHandlers[mediaPlayer] = trackOpenedHandler;
+                        // Subscribe before assigning Source: MediaOpened fires on a background
+                        // thread and can beat a subscription made after the assignment.
                         mediaPlayer.MediaOpened += trackOpenedHandler;
+                        mediaPlayer.Source = new MediaPlaybackItem(MediaSource.CreateFromStorageFile(file));
                     }
                 }
                 else
