@@ -5,6 +5,14 @@ using Microsoft.UI.Xaml.Input;
 
 namespace TrackMixerv2;
 
+public enum SliderStepSetting
+{
+    Fixed,
+    Volume,
+    Rating,
+    Progress,
+}
+
 public static class SliderWheelBehavior
 {
     public static readonly DependencyProperty IsEnabledProperty =
@@ -14,22 +22,22 @@ public static class SliderWheelBehavior
             typeof(SliderWheelBehavior),
             new PropertyMetadata(false, OnIsEnabledChanged));
 
-    public static readonly DependencyProperty UseWheelSpeedMultiplierProperty =
+    public static readonly DependencyProperty StepSettingProperty =
         DependencyProperty.RegisterAttached(
-            "UseWheelSpeedMultiplier",
-            typeof(bool),
+            "StepSetting",
+            typeof(SliderStepSetting),
             typeof(SliderWheelBehavior),
-            new PropertyMetadata(true));
+            new PropertyMetadata(SliderStepSetting.Fixed));
 
     public static bool GetIsEnabled(DependencyObject obj) => (bool)obj.GetValue(IsEnabledProperty);
 
     public static void SetIsEnabled(DependencyObject obj, bool value) => obj.SetValue(IsEnabledProperty, value);
 
-    public static bool GetUseWheelSpeedMultiplier(DependencyObject obj) =>
-        (bool)obj.GetValue(UseWheelSpeedMultiplierProperty);
+    public static SliderStepSetting GetStepSetting(DependencyObject obj) =>
+        (SliderStepSetting)obj.GetValue(StepSettingProperty);
 
-    public static void SetUseWheelSpeedMultiplier(DependencyObject obj, bool value) =>
-        obj.SetValue(UseWheelSpeedMultiplierProperty, value);
+    public static void SetStepSetting(DependencyObject obj, SliderStepSetting value) =>
+        obj.SetValue(StepSettingProperty, value);
 
     private static void OnIsEnabledChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
@@ -57,15 +65,17 @@ public static class SliderWheelBehavior
         e.Handled = true;
     }
 
-    internal static double GetWheelStep(Slider slider)
-    {
-        int speedMultiplier = GetUseWheelSpeedMultiplier(slider)
-            ? LocalSettingsStore.GetSliderWheelSpeed()
-            : 1;
-
-        return SliderWheelRules.GetWheelStep(
+    internal static double GetWheelStep(Slider slider) =>
+        SliderWheelRules.GetWheelStep(
             slider.SmallChange,
             slider.TickFrequency,
-            speedMultiplier);
-    }
+            GetStepSize(GetStepSetting(slider)));
+
+    private static int GetStepSize(SliderStepSetting setting) => setting switch
+    {
+        SliderStepSetting.Volume => LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize),
+        SliderStepSetting.Rating => LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize),
+        SliderStepSetting.Progress => LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize),
+        _ => 1,
+    };
 }

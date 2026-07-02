@@ -13,14 +13,18 @@ public static class LocalSettingsStore
         public const string DragAndDropOnNewTab = "DragAndDropOnNewTab";
         public const string RecentVideo = "RecentVideo";
         public const string SkipSeconds = "SkipSeconds";
+        // Legacy global multiplier; kept as the default for the per-slider keys below.
         public const string SliderWheelSpeed = "SliderWheelSpeed";
+        public const string VolumeSliderStepSize = "VolumeSliderStepSize";
+        public const string RatingSliderStepSize = "RatingSliderStepSize";
+        public const string ProgressSliderStepSize = "ProgressSliderStepSize";
         public const string SpeedBoostRate = "SpeedBoostRate";
         public const string SpeedSlowRate = "SpeedSlowRate";
         public const string TransportRatesJson = "TransportRatesJson";
     }
 
     public const int DefaultSkipSeconds = 5;
-    public const int DefaultSliderWheelSpeed = 2;
+    public const int DefaultSliderStepSize = 2;
     public const double DefaultSpeedBoostRate = 2.0;
     public const double DefaultSpeedSlowRate = 0.25;
 
@@ -91,11 +95,11 @@ public static class LocalSettingsStore
     public static void SetSkipSeconds(int seconds) =>
         Set(Keys.SkipSeconds, Math.Max(1, seconds));
 
-    public static int GetSliderWheelSpeed(int defaultValue = DefaultSliderWheelSpeed) =>
-        Math.Max(1, GetInt(Keys.SliderWheelSpeed, defaultValue));
+    public static int GetSliderStepSize(string key) =>
+        Math.Max(1, GetInt(key, GetInt(Keys.SliderWheelSpeed, DefaultSliderStepSize)));
 
-    public static void SetSliderWheelSpeed(int speed) =>
-        Set(Keys.SliderWheelSpeed, Math.Max(1, speed));
+    public static void SetSliderStepSize(string key, int stepSize) =>
+        Set(key, Math.Max(1, stepSize));
 
     public static double GetSpeedBoostRate(double defaultValue = DefaultSpeedBoostRate) =>
         PlaybackRates.NormalizeBoostRate(GetDouble(Keys.SpeedBoostRate, defaultValue));

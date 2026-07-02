@@ -96,17 +96,52 @@
                            Value="5"
                            SmallChange="1"
                            LargeChange="5"
+                           SpinButtonPlacementMode="Inline"
                            HorizontalAlignment="Stretch" />
 
-                <TextBlock Text="Slider mouse wheel speed" />
-                <NumberBox x:Name="SliderWheelSpeedNumberBox"
-                           Minimum="1"
-                           Maximum="20"
-                           Value="2"
-                           SmallChange="1"
-                           LargeChange="1"
-                           HorizontalAlignment="Stretch" />
-                <TextBlock Text="Multiplies each slider's own step (volume, rating, progress, and transport)."
+                <TextBlock Text="Slider step sizes" />
+                <Grid ColumnSpacing="8" RowSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Volume" VerticalAlignment="Center" />
+                    <NumberBox x:Name="VolumeStepSizeNumberBox"
+                               Grid.Row="0"
+                               Grid.Column="1"
+                               Minimum="1"
+                               Value="2"
+                               SmallChange="1"
+                               LargeChange="1"
+                               SpinButtonPlacementMode="Inline"
+                               HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Row="1" Text="Rating" VerticalAlignment="Center" />
+                    <NumberBox x:Name="RatingStepSizeNumberBox"
+                               Grid.Row="1"
+                               Grid.Column="1"
+                               Minimum="1"
+                               Value="2"
+                               SmallChange="1"
+                               LargeChange="1"
+                               SpinButtonPlacementMode="Inline"
+                               HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Row="2" Text="Progress" VerticalAlignment="Center" />
+                    <NumberBox x:Name="ProgressStepSizeNumberBox"
+                               Grid.Row="2"
+                               Grid.Column="1"
+                               Minimum="1"
+                               Value="2"
+                               SmallChange="1"
+                               LargeChange="1"
+                               SpinButtonPlacementMode="Inline"
+                               HorizontalAlignment="Stretch" />
+                </Grid>
+                <TextBlock Text="How far each slider moves per mouse wheel notch. Playback speed always moves one step."
                            TextWrapping="WrapWholeWords"
                            Opacity="0.8"
                            FontSize="12" />
@@ -335,6 +370,7 @@
                                             HorizontalAlignment="Stretch"
                                             AutomationProperties.AutomationId="RatingSlider"
                                             AutomationProperties.Name="Rating"
+                                            local:SliderWheelBehavior.StepSetting="Rating"
                                             TickFrequency="10"
                                             TickPlacement="None"
                                             SnapsTo="StepValues"

@@ -2,10 +2,10 @@ namespace TrackMixerv2;
 
 public static class SliderWheelRules
 {
-    public static double GetWheelStep(double smallChange, double tickFrequency, int speedMultiplier = 1)
+    public static double GetWheelStep(double smallChange, double tickFrequency, int stepSize = 1)
     {
         double baseStep = GetBaseWheelStep(smallChange, tickFrequency);
-        return baseStep * Math.Max(1, speedMultiplier);
+        return baseStep * Math.Max(1, stepSize);
     }
 
     public static double GetBaseWheelStep(double smallChange, double tickFrequency)

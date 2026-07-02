@@ -10,12 +10,12 @@ public sealed class SliderWheelRulesScenarioTests
     [InlineData(0, 0, 1, 1)]
     [InlineData(0, 5, 2, 10)]
     [InlineData(1, 5, 2, 2)]
-    public void GetWheelStep_prefers_small_change_then_tick_frequency_then_one_and_applies_speed(
+    public void GetWheelStep_prefers_small_change_then_tick_frequency_then_one_and_applies_step_size(
         double smallChange,
         double tickFrequency,
-        int speedMultiplier,
+        int stepSize,
         double expected)
     {
-        Assert.Equal(expected, SliderWheelRules.GetWheelStep(smallChange, tickFrequency, speedMultiplier));
+        Assert.Equal(expected, SliderWheelRules.GetWheelStep(smallChange, tickFrequency, stepSize));
     }
 }

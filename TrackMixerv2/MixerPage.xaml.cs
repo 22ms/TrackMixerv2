@@ -77,6 +77,8 @@ namespace TrackMixerv2
             PlaylistFilterChrono.Click += PlaylistFilterMode_Click;
             PlaylistFilterRating.Click += PlaylistFilterMode_Click;
             PlaylistSubfolderToggle.Click += PlaylistSubfolderToggle_Click;
+            PreferencesDialog.Opened += PreferencesDialog_Opened;
+            PreferencesDialog.PrimaryButtonClick += PreferencesDialog_PrimaryButtonClick;
             LoadMetadata(path);
             Loaded += MixerPage_Loaded;
         }
@@ -100,10 +102,29 @@ namespace TrackMixerv2
             if (TryHandleKeybindRecordingKeyUp(e))
                 e.Handled = true;
         }
+
+        // The step-size boxes have no Maximum, so a plain (int) cast could overflow.
+        private static int ReadWholeNumber(NumberBox numberBox) =>
+            (int)Math.Round(Math.Clamp(numberBox.Value, numberBox.Minimum, int.MaxValue));
+
+        private void PreferencesDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
+        {
+            NumberBoxHelper.SetValue(SkipSecondsNumberBox, LocalSettingsStore.GetSkipSeconds());
+            NumberBoxHelper.SetValue(VolumeStepSizeNumberBox, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize));
+            NumberBoxHelper.SetValue(RatingStepSizeNumberBox, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize));
+            NumberBoxHelper.SetValue(ProgressStepSizeNumberBox, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize));
+        }
+
+        private void PreferencesDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+        {
+            NumberBoxHelper.CommitTypedText(SkipSecondsNumberBox);
+            NumberBoxHelper.CommitTypedText(VolumeStepSizeNumberBox);
+            NumberBoxHelper.CommitTypedText(RatingStepSizeNumberBox);
+            NumberBoxHelper.CommitTypedText(ProgressStepSizeNumberBox);
+        }
+
         private async void Preferences_Click(object sender, RoutedEventArgs e)
         {
-            SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
-            SliderWheelSpeedNumberBox.Value = LocalSettingsStore.GetSliderWheelSpeed();
             ShowAdvancedSettingsCheckBox.IsChecked = false;
             AdvancedPreferencesPanel.Visibility = Visibility.Collapsed;
             LoadTransportRatesEditor();
@@ -122,7 +143,9 @@ namespace TrackMixerv2
                     LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
                     LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
                     LocalSettingsStore.SetSkipSeconds((int)Math.Round(SkipSecondsNumberBox.Value));
-                    LocalSettingsStore.SetSliderWheelSpeed((int)Math.Round(SliderWheelSpeedNumberBox.Value));
+                    LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize, ReadWholeNumber(VolumeStepSizeNumberBox));
+                    LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize, ReadWholeNumber(RatingStepSizeNumberBox));
+                    LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize, ReadWholeNumber(ProgressStepSizeNumberBox));
 
                     double boostRate = GetSelectedHoldSpeedRate(
                         SpeedBoostRateComboBox,
@@ -739,9 +762,6 @@ namespace TrackMixerv2
                 else
                     DoubleClickCheckBox.IsChecked = true;
 
-                SkipSecondsNumberBox.Value = LocalSettingsStore.GetSkipSeconds();
-                SliderWheelSpeedNumberBox.Value = LocalSettingsStore.GetSliderWheelSpeed();
-
                 initialLoaded = true;
             });
         }
@@ -867,6 +887,7 @@ namespace TrackMixerv2
                 Maximum = 100,
                 Minimum = 0,
             };
+            SliderWheelBehavior.SetStepSetting(volumeSlider, SliderStepSetting.Volume);
             AutomationProperties.SetAutomationId(volumeSlider, automationId);
             AutomationProperties.SetName(volumeSlider, accessibleName);
             return volumeSlider;

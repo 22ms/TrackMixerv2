@@ -485,7 +485,8 @@
                                                     Height="{ThemeResource MediaTransportControlsSliderHeight}"
                                                     VerticalAlignment="Center"
                                                     IsThumbToolTipEnabled="False"
-                                                    IsTabStop="False" />
+                                                    IsTabStop="False"
+                                                    local:SliderWheelBehavior.StepSetting="Progress" />
                                             <ProgressBar x:Name="BufferingProgressBar"
                                                          Height="4"
                                                          IsIndeterminate="True"
@@ -681,8 +682,7 @@
                                                                         SnapsTo="StepValues"
                                                                         StepFrequency="1"
                                                                         TickFrequency="1"
-                                                                        TickPlacement="BottomRight"
-                                                                        local:SliderWheelBehavior.UseWheelSpeedMultiplier="False" />
+                                                                        TickPlacement="BottomRight" />
                                                                 <Canvas x:Name="PlaybackRateTickLabelsCanvas"
                                                                         Margin="8,0,8,2"
                                                                         Height="16"

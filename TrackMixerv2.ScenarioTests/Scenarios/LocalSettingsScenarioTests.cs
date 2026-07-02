@@ -42,13 +42,26 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     }
 
     [Fact]
-    public void Slider_wheel_speed_round_trip_through_disk()
+    public void Slider_step_sizes_round_trip_through_disk_independently()
     {
-        LocalSettingsStore.SetSliderWheelSpeed(4);
+        LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize, 4);
+        LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize, 7);
         LocalSettingsStore.ResetCache();
 
-        Assert.Equal(4, LocalSettingsStore.GetSliderWheelSpeed());
-        Assert.Equal(20, SliderWheelRules.GetWheelStep(0, 5, LocalSettingsStore.GetSliderWheelSpeed()));
+        Assert.Equal(4, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize));
+        Assert.Equal(7, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize));
+        Assert.Equal(20, SliderWheelRules.GetWheelStep(0, 5, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize)));
+    }
+
+    [Fact]
+    public void Slider_step_size_defaults_to_legacy_wheel_speed_then_two()
+    {
+        Assert.Equal(2, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize));
+
+        LocalSettingsStore.Set(LocalSettingsStore.Keys.SliderWheelSpeed, 6);
+        LocalSettingsStore.ResetCache();
+
+        Assert.Equal(6, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize));
     }
 
     [Fact]
