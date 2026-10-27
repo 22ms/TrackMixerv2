@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Media.Core;
 using Windows.Media.MediaProperties;
@@ -11,12 +12,25 @@ namespace TrackMixerv2;
 public sealed class AudioTrackSource : IDisposable
 {
     private readonly AudioTrackReader _reader;
+    private readonly PeakLimiter _limiter;
+    private volatile float _gain = 1f;
 
     public MediaStreamSource MediaStreamSource { get; }
+
+    /// <summary>
+    /// Amplification on top of MediaPlayer.Volume, which stops at 1. Above 1 the
+    /// <see cref="PeakLimiter"/> keeps the louder signal from clipping.
+    /// </summary>
+    public double Gain
+    {
+        get => _gain;
+        set => _gain = (float)Math.Max(1.0, value);
+    }
 
     public AudioTrackSource(string path, uint streamIndex)
     {
         _reader = new AudioTrackReader(path, streamIndex);
+        _limiter = new PeakLimiter((int)_reader.SampleRate, (int)_reader.Channels);
         var properties = AudioEncodingProperties.CreatePcm(_reader.SampleRate, _reader.Channels, 32);
         properties.Subtype = MediaEncodingSubtypes.Float;
 
@@ -33,6 +47,7 @@ public sealed class AudioTrackSource : IDisposable
             if (args.Request.StartPosition is TimeSpan start)
             {
                 _reader.Seek(start);
+                _limiter.Reset();
                 args.Request.SetActualStartPosition(start);
             }
         };
@@ -40,6 +55,8 @@ public sealed class AudioTrackSource : IDisposable
         {
             if (!_reader.TryRead(out byte[] pcm, out TimeSpan timestamp, out TimeSpan duration))
                 return;
+
+            _limiter.Process(MemoryMarshal.Cast<byte, float>(pcm.AsSpan()), _gain);
 
             var sample = MediaStreamSample.CreateFromBuffer(pcm.AsBuffer(), timestamp);
             sample.Duration = duration;

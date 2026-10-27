@@ -45,6 +45,12 @@ public static class ExportPipeline
     public const string MixedAudioLabel = "[mixedaudio]";
 
     /// <summary>
+    /// What the preview's PeakLimiter does to a track above 100%: the same ceiling and release,
+    /// with the shortest attack alimiter allows. level=0 stops alimiter from raising the output.
+    /// </summary>
+    public const string BoostLimiterFilter = "alimiter=limit=0.98:attack=0.1:release=50:level=0";
+
+    /// <summary>
     /// Applies each track's slider level and mixes them into <see cref="MixedAudioLabel"/>.
     /// Returns null when there is no audio to mix.
     /// </summary>
@@ -58,7 +64,8 @@ public static class ExportPipeline
         {
             double level = i < normalizedLevels.Length ? normalizedLevels[i] : 1.0;
             string output = audioStreamCount == 1 ? MixedAudioLabel : $"[a{i}]";
-            filterParts.Add($"[0:a:{i}]volume={level.ToString("0.##", CultureInfo.InvariantCulture)}{output}");
+            string limiter = level > 1 ? "," + BoostLimiterFilter : "";
+            filterParts.Add($"[0:a:{i}]volume={level.ToString("0.##", CultureInfo.InvariantCulture)}{limiter}{output}");
         }
 
         if (audioStreamCount > 1)

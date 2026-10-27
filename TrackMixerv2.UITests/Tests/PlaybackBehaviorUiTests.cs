@@ -32,14 +32,14 @@ public sealed class PlaybackBehaviorUiTests : IDisposable
     public void Dispose() => _session.Dispose();
 
     [Fact]
-    public void Every_extra_track_plays_audio_only_and_on_the_same_clock()
+    public void Every_track_plays_audio_only_and_on_the_same_clock_as_the_video()
     {
         var diagnostics = _session.WaitForDiagnostics(
             d => d.Position > 2 && d.Tracks.All(t => t.State == "Playing"),
             "two seconds of playback on every track");
 
-        Assert.Equal("video", diagnostics.Tracks[0].Kind);
-        Assert.All(diagnostics.Tracks.Skip(1), track => Assert.Equal("audio-only", track.Kind));
+        Assert.Equal("Playing", diagnostics.Video?.State);
+        Assert.All(diagnostics.Tracks, track => Assert.Equal("audio-only", track.Kind));
         Assert.True(diagnostics.Spread < 0.05, $"tracks drifted apart: {diagnostics}");
     }
 

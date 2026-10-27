@@ -52,6 +52,15 @@ public sealed class ExportWorkflowScenarioTests
     }
 
     [Fact]
+    public void Export_limits_only_boosted_tracks()
+    {
+        string? filter = ExportPipeline.BuildFilterComplex(2, new[] { 1.5, 1.0 });
+
+        Assert.Contains($"[0:a:0]volume=1.5,{ExportPipeline.BoostLimiterFilter}[a0]", filter);
+        Assert.Contains("[0:a:1]volume=1[a1]", filter);
+    }
+
+    [Fact]
     public void Export_of_a_video_without_audio_has_no_audio_filter()
     {
         Assert.Null(ExportPipeline.BuildFilterComplex(0, Array.Empty<double>()));

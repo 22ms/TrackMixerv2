@@ -7,16 +7,20 @@ public sealed class PlaybackDiagnostics
     public double Position { get; set; }
     public double Duration { get; set; }
     public double Rate { get; set; }
+    public TrackDiagnostics? Video { get; set; }
     public List<TrackDiagnostics> Tracks { get; set; } = new();
 
     public bool IsRunning => State == "Running";
 
-    /// <summary>Largest gap between any two players' positions, in seconds.</summary>
+    /// <summary>Largest gap between any two players' positions (video included), in seconds.</summary>
     public double Spread
     {
         get
         {
-            var positions = Tracks.Where(track => track.Position != null).Select(track => track.Position!.Value).ToList();
+            var positions = Tracks.Append(Video)
+                .Where(track => track?.Position != null)
+                .Select(track => track!.Position!.Value)
+                .ToList();
             return positions.Count == 0 ? 0 : positions.Max() - positions.Min();
         }
     }

@@ -25,10 +25,11 @@ using static TrackMixerv2.PlaylistHelper;
 namespace TrackMixerv2
 {
     /// <summary>
-    /// Plays a video with all of its audio tracks at once. Track 0 plays in the video's own
-    /// player; each further track gets an audio-only player (AudioTrackSource never decodes
-    /// video). All players run on one MediaTimelineController, so they share a single clock
-    /// and never need re-seeking to stay in sync. Under a timeline controller
+    /// Plays a video with all of its audio tracks at once. Every track gets an audio-only player
+    /// (AudioTrackSource never decodes video, and its gain goes above 100%) and the video's own
+    /// player is muted; if track 0 can't be read alone, the video player plays it instead. All
+    /// players run on one MediaTimelineController, so they share a single clock and never need
+    /// re-seeking to stay in sync. Under a timeline controller
     /// MediaPlayer.Play/Pause/Position throw, so this class drives the transport itself.
     /// </summary>
     public sealed partial class MixedMediaPlayer : Page
@@ -66,6 +67,7 @@ namespace TrackMixerv2
         private int _openGeneration;
         private MediaTimelineController? _timeline;
         private MediaPlayer? _mainPlayer;
+        /// <summary>Indexed by track; null means the track has no player of its own.</summary>
         private TrackPlayer?[] _trackPlayers = [];
         private TimeSpan _duration;
         private TimeSpan? _seekTarget;
@@ -194,9 +196,12 @@ namespace TrackMixerv2
                     .ToList();
 
                 trackPlayers.AddRange(await Task.WhenAll(
-                    audioTracks.Skip(1).Select((track, index) => OpenTrackPlayerAsync(filePath, file, track, index + 1))));
+                    audioTracks.Select((track, index) => OpenTrackPlayerAsync(filePath, file, track, index))));
                 if (generation != _openGeneration)
                     return;
+
+                if (trackPlayers.Count > 0 && trackPlayers[0] != null)
+                    mainPlayer.IsMuted = true;
 
                 var timeline = new MediaTimelineController { ClockRate = PlaybackRate };
                 // Start/Pause/Resume change State asynchronously, so the transport follows the event.
@@ -265,6 +270,13 @@ namespace TrackMixerv2
                 }
 
                 source?.Dispose();
+            }
+
+            // Track 0 then simply plays in the video's own player.
+            if (trackIndex == 0)
+            {
+                DisposePlayer(player);
+                return null;
             }
 
             // Fallback: the whole container with this track selected. This decodes the video a
@@ -469,18 +481,23 @@ namespace TrackMixerv2
             customMixedMediaPlayerControl?.SetPlaybackRateSelection(PlaybackRate);
         }
 
+        /// <summary>
+        /// 100 is unchanged. MediaPlayer.Volume handles up to 100 so slider moves are heard at
+        /// once; above that the audio-only source amplifies. A track without one stops at 100.
+        /// </summary>
         public void SetVolume(int trackIndex, double volume)
         {
             volume /= 100;
-            if (trackIndex == 0)
+            if (trackIndex >= 0 && trackIndex < _trackPlayers.Length && _trackPlayers[trackIndex] is TrackPlayer track)
             {
-                if (_mainPlayer != null)
-                    _mainPlayer.Volume = volume;
-                return;
+                track.Player.Volume = Math.Min(volume, 1);
+                if (track.AudioOnlySource != null)
+                    track.AudioOnlySource.Gain = volume;
             }
-
-            if (trackIndex > 0 && trackIndex <= _trackPlayers.Length && _trackPlayers[trackIndex - 1] is TrackPlayer track)
-                track.Player.Volume = volume;
+            else if (trackIndex == 0 && _mainPlayer != null)
+            {
+                _mainPlayer.Volume = Math.Min(volume, 1);
+            }
         }
 
         private void OnMediaEnded()
@@ -626,14 +643,14 @@ namespace TrackMixerv2
         private void UpdateDiagnostics(TimeSpan position)
         {
             var tracks = new List<object>();
-            if (_mainPlayer != null)
-                tracks.Add(DescribePlayer(0, _mainPlayer, "video"));
             for (int i = 0; i < _trackPlayers.Length; i++)
             {
                 if (_trackPlayers[i] is TrackPlayer track)
-                    tracks.Add(DescribePlayer(i + 1, track.Player, track.AudioOnlySource != null ? "audio-only" : "fallback"));
+                    tracks.Add(DescribePlayer(i, track.Player, track.AudioOnlySource != null ? "audio-only" : "fallback", track.AudioOnlySource?.Gain ?? 1));
+                else if (i == 0 && _mainPlayer != null)
+                    tracks.Add(DescribePlayer(0, _mainPlayer, "video", 1));
                 else
-                    tracks.Add(new { index = i + 1, kind = "missing" });
+                    tracks.Add(new { index = i, kind = "missing" });
             }
 
             PlaybackDiagnostics.Text = JsonSerializer.Serialize(new
@@ -643,11 +660,12 @@ namespace TrackMixerv2
                 position = position.TotalSeconds,
                 duration = _duration.TotalSeconds,
                 rate = PlaybackRate,
+                video = _mainPlayer == null ? null : DescribePlayer(-1, _mainPlayer, "video", 1),
                 tracks,
             });
         }
 
-        private static object DescribePlayer(int index, MediaPlayer player, string kind)
+        private static object DescribePlayer(int index, MediaPlayer player, string kind, double gain)
         {
             try
             {
@@ -657,7 +675,7 @@ namespace TrackMixerv2
                     kind,
                     position = player.PlaybackSession.Position.TotalSeconds,
                     state = player.PlaybackSession.PlaybackState.ToString(),
-                    volume = player.Volume,
+                    volume = player.Volume * gain,
                 };
             }
             catch (COMException)
