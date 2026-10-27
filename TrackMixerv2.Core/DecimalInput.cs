@@ -15,9 +15,6 @@ public static class DecimalInput
         if (TryParseWithCulture(input, CultureInfo.InvariantCulture, out value))
             return true;
 
-        if (input.Contains('.') && !input.Contains(','))
-            return TryParseWithCulture(input, CultureInfo.InvariantCulture, out value);
-
         if (TryParseWithCulture(input, CultureInfo.CurrentCulture, out value))
             return true;
 

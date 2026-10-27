@@ -1,3 +1,4 @@
+using System.Globalization;
 using TrackMixerv2;
 
 namespace TrackMixerv2.ScenarioTests.Scenarios;
@@ -37,18 +38,62 @@ public sealed class ExportWorkflowScenarioTests
         double[] sliderLevels = { 100, 50, 0 };
         double[] normalized = sliderLevels.Select(level => level / 100.0).ToArray();
 
-        string filter = ExportPipeline.BuildFilterComplex(3, normalized);
+        string? filter = ExportPipeline.BuildFilterComplex(3, normalized);
 
-        Assert.Contains("[0:a:0]volume=1[a0]", filter);
-        Assert.Contains("[0:a:1]volume=0.5[a1]", filter);
-        Assert.Contains("[0:a:2]volume=0[a2]", filter);
-        Assert.Contains("[a0][a1][a2]amix=inputs=3[mixedaudio]", filter);
+        Assert.Equal(
+            "[0:a:0]volume=1[a0];[0:a:1]volume=0.5[a1];[0:a:2]volume=0[a2];[a0][a1][a2]amix=inputs=3:normalize=0[mixedaudio]",
+            filter);
+    }
+
+    [Fact]
+    public void Export_of_a_single_track_skips_amix()
+    {
+        Assert.Equal("[0:a:0]volume=0.8[mixedaudio]", ExportPipeline.BuildFilterComplex(1, new[] { 0.8 }));
+    }
+
+    [Fact]
+    public void Export_of_a_video_without_audio_has_no_audio_filter()
+    {
+        Assert.Null(ExportPipeline.BuildFilterComplex(0, Array.Empty<double>()));
+    }
+
+    [Theory]
+    [InlineData(@"C:\clips\a.mkv", ".mkv")]
+    [InlineData(@"C:\clips\a.MP4", ".mp4")]
+    [InlineData(@"C:\clips\a.webm", ".mp4")]
+    [InlineData(@"C:\clips\a.avi", ".mp4")]
+    [InlineData(@"C:\clips\a.wmv", ".mp4")]
+    public void Export_container_can_hold_h264_and_aac(string input, string expected)
+    {
+        Assert.Equal(expected, ExportPipeline.GetOutputExtension(input));
+    }
+
+    [Theory]
+    [InlineData("1.5", 1.5)]
+    [InlineData("1,5", 1.5)]
+    [InlineData("01:02.5", 62.5)]
+    [InlineData("01:02,5", 62.5)]
+    public void Export_trim_parsing_does_not_depend_on_the_system_language(string input, double expectedSeconds)
+    {
+        CultureInfo previous = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (string culture in new[] { "de-DE", "en-US" })
+            {
+                CultureInfo.CurrentCulture = new CultureInfo(culture);
+                Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), ExportPipeline.ParseTimeInput(input));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]
     public void Export_tolerates_fewer_sliders_than_audio_tracks()
     {
-        string filter = ExportPipeline.BuildFilterComplex(4, new[] { 0.75, 0.25 });
+        string? filter = ExportPipeline.BuildFilterComplex(4, new[] { 0.75, 0.25 });
 
         Assert.Contains("[0:a:0]volume=0.75[a0]", filter);
         Assert.Contains("[0:a:1]volume=0.25[a1]", filter);

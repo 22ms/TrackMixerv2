@@ -688,8 +688,6 @@ namespace TrackMixerv2
                 {
                     FileName = "ffmpeg",
                     Arguments = "-version",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
@@ -713,6 +711,28 @@ namespace TrackMixerv2
         }
 
         private async Task ExportCurrentFileAsync()
+        {
+            try
+            {
+                await ExportCurrentFileCoreAsync();
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Export failed: {ex}");
+                await ShowMessageAsync("Export failed", ex.Message);
+            }
+        }
+
+        private async Task ShowMessageAsync(string title, string message) =>
+            await ContentDialogPresenter.ShowAsync(new ContentDialog
+            {
+                Title = title,
+                Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot,
+            });
+
+        private async Task ExportCurrentFileCoreAsync()
         {
             if (!await IsFFmpegAvailable())
             {
@@ -743,8 +763,7 @@ namespace TrackMixerv2
                 return;
             }
 
-            MixerPage page = (TabView.SelectedItem as TabViewItem)?.Content as MixerPage;
-            if (page == null)
+            if (ActiveMixerPage is not MixerPage page)
                 return;
 
             var wasPlaying = page.PauseMediaIfPlaying();
@@ -753,6 +772,7 @@ namespace TrackMixerv2
                 double[] levels = page.GetVolumeLevels();
             double[] normalizedLevels = levels.Select(l => l / 100.0).ToArray();
             string inputPath = page.GetCurrentPath();
+            string outputExtension = ExportPipeline.GetOutputExtension(inputPath);
 
             var dialog = new ContentDialog
             {
@@ -866,8 +886,8 @@ namespace TrackMixerv2
             {
                 var savePicker = new FileSavePicker();
                 savePicker.SuggestedStartLocation = PickerLocationId.VideosLibrary;
-                savePicker.FileTypeChoices.Add("Video Files", new List<string> { Path.GetExtension(inputPath) });
-                savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(inputPath)}_MIXED{Path.GetExtension(inputPath)}";
+                savePicker.FileTypeChoices.Add("Video Files", new List<string> { outputExtension });
+                savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(inputPath)}_MIXED{outputExtension}";
 
                 var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
                 WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
@@ -888,13 +908,7 @@ namespace TrackMixerv2
 
                 if (!clipboardOnly && string.IsNullOrEmpty(outputPath))
                 {
-                    await new ContentDialog
-                    {
-                        Title = "Error",
-                        Content = "Please specify an export path or select 'Clipboard only'.",
-                        CloseButtonText = "OK",
-                        XamlRoot = this.Content.XamlRoot
-                    }.ShowAsync();
+                    await ShowMessageAsync("Error", "Please specify an export path or select 'Clipboard only'.");
                     return;
                 }
 
@@ -921,7 +935,7 @@ namespace TrackMixerv2
 
                     if (hasTargetSize)
                     {
-                        if (!double.TryParse(targetSizeTextBox.Text, out targetFileSizeMB) || targetFileSizeMB <= 0)
+                        if (!DecimalInput.TryParse(targetSizeTextBox.Text, out targetFileSizeMB) || targetFileSizeMB <= 0)
                         {
                             throw new Exception("Target file size must be a positive number.");
                         }
@@ -929,13 +943,7 @@ namespace TrackMixerv2
                 }
                 catch (Exception ex)
                 {
-                    await new ContentDialog
-                    {
-                        Title = "Invalid Input",
-                        Content = $"Error parsing input: {ex.Message}",
-                        CloseButtonText = "OK",
-                        XamlRoot = this.Content.XamlRoot
-                    }.ShowAsync();
+                    await ShowMessageAsync("Invalid Input", $"Error parsing input: {ex.Message}");
                     return;
                 }
 
@@ -951,13 +959,7 @@ namespace TrackMixerv2
 
                 if (durationSeconds <= 0)
                 {
-                    await new ContentDialog
-                    {
-                        Title = "Error",
-                        Content = "Unable to determine media duration.",
-                        CloseButtonText = "OK",
-                        XamlRoot = this.Content.XamlRoot
-                    }.ShowAsync();
+                    await ShowMessageAsync("Error", "Unable to determine media duration.");
                     return;
                 }
 
@@ -966,28 +968,28 @@ namespace TrackMixerv2
 
                 if (videoBitrateKbps <= 0)
                 {
-                    await new ContentDialog
-                    {
-                        Title = "Error",
-                        Content = "Target file size is too small for the given duration.",
-                        CloseButtonText = "OK",
-                        XamlRoot = this.Content.XamlRoot
-                    }.ShowAsync();
+                    await ShowMessageAsync("Error", "Target file size is too small for the given duration.");
                     return;
                 }
 
                 string videoBitrateKbpsText = videoBitrateKbps.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
                 string audioBitrateKbps = (audioBitrate / 1000).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-                string filterComplex = ExportPipeline.BuildFilterComplex(audioStreams.Count, normalizedLevels);
+                string? filterComplex = ExportPipeline.BuildFilterComplex(audioStreams.Count, normalizedLevels);
 
                 var conversion = FFmpeg.Conversions.New()
-                    .AddParameter($"-i \"{inputPath}\"")
-                    .AddParameter($"-filter_complex \"{filterComplex}\"")
-                    .AddParameter("-map [mixedaudio]")
+                    .AddParameter($"-i \"{inputPath}\"");
+                if (filterComplex != null)
+                {
+                    conversion
+                        .AddParameter($"-filter_complex \"{filterComplex}\"")
+                        .AddParameter($"-map {ExportPipeline.MixedAudioLabel}");
+                }
+                conversion
                     .AddParameter("-map 0:v")
                     .AddParameter("-c:v libx264")
-                    .AddParameter($"-b:v {videoBitrateKbpsText}k")
-                    .AddParameter($"-c:a aac -b:a {audioBitrateKbps}k");
+                    .AddParameter($"-b:v {videoBitrateKbpsText}k");
+                if (filterComplex != null)
+                    conversion.AddParameter($"-c:a aac -b:a {audioBitrateKbps}k");
 
                 if (hasStartTime)
                     conversion.AddParameter($"-ss {startTime}");
@@ -998,7 +1000,7 @@ namespace TrackMixerv2
                 if (clipboardOnly)
                 {
                     Directory.CreateDirectory(AppPaths.ScratchDirectory);
-                    string tempPath = Path.Combine(AppPaths.ScratchDirectory, $"{Guid.NewGuid()}{Path.GetExtension(inputPath)}");
+                    string tempPath = Path.Combine(AppPaths.ScratchDirectory, $"{Guid.NewGuid()}{outputExtension}");
 
                     File.AppendAllLines(AppPaths.TempFilesRecordPath, new[] { tempPath });
 
@@ -1008,14 +1010,7 @@ namespace TrackMixerv2
                     await conversion.Start();
 
                     await CopyFileToClipboardAsync(tempPath);
-
-                    await new ContentDialog
-                    {
-                        Title = "Success",
-                        Content = "File exported to clipboard successfully!",
-                        CloseButtonText = "OK",
-                        XamlRoot = this.Content.XamlRoot
-                    }.ShowAsync();
+                    await ShowMessageAsync("Success", "File exported to clipboard successfully!");
                 }
                 else
                 {
@@ -1025,14 +1020,7 @@ namespace TrackMixerv2
                     await conversion.Start();
 
                     await CopyFileToClipboardAsync(outputPath);
-
-                    await new ContentDialog
-                    {
-                        Title = "Success",
-                        Content = "File exported and copied to clipboard successfully!",
-                        CloseButtonText = "OK",
-                        XamlRoot = this.Content.XamlRoot
-                    }.ShowAsync();
+                    await ShowMessageAsync("Success", "File exported and copied to clipboard successfully!");
                 }
             }
             }
