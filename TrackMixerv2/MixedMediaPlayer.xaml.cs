@@ -225,7 +225,7 @@ namespace TrackMixerv2
                 CloseButtonText = "Dismiss"
             };
 
-            await ContentDialogPresenter.TryShowAsync(unsupportedCodecDialog);
+            await ContentDialogPresenter.ShowAsync(unsupportedCodecDialog);
         }
 
         private void RequestUnsupportedCodecDialog(int mediaGeneration)

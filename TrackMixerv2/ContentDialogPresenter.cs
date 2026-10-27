@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
 
@@ -6,21 +7,20 @@ namespace TrackMixerv2;
 
 public static class ContentDialogPresenter
 {
-    public static async Task<ContentDialogResult?> TryShowAsync(ContentDialog dialog)
+    // WinUI throws when a second ContentDialog opens while one is showing (e.g. the root
+    // folder prompt from a file activation while Preferences is open), so dialogs queue.
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    public static async Task<ContentDialogResult> ShowAsync(ContentDialog dialog)
     {
-        if (UiTestBootstrap.IsEnabled)
-            return null;
-
-        if (!ContentDialogShowGate.TryAcquire())
-            return null;
-
+        await Gate.WaitAsync();
         try
         {
             return await dialog.ShowAsync();
         }
         finally
         {
-            ContentDialogShowGate.Release();
+            Gate.Release();
         }
     }
 }

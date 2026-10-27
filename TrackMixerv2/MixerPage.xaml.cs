@@ -136,7 +136,7 @@ namespace TrackMixerv2
             var wasPlaying = PauseMediaIfPlaying();
             try
             {
-                var result = await PreferencesDialog.ShowAsync();
+                var result = await ContentDialogPresenter.ShowAsync(PreferencesDialog);
 
                 if (result == ContentDialogResult.Primary)
                 {
@@ -1264,7 +1264,7 @@ namespace TrackMixerv2
                 XamlRoot = PageRootGrid.XamlRoot,
             };
 
-            await ContentDialogPresenter.TryShowAsync(dialog);
+            await ContentDialogPresenter.ShowAsync(dialog);
         }
 
         private void RefreshKeybindList()
@@ -1439,7 +1439,7 @@ namespace TrackMixerv2
             try
             {
                 RefreshRootFoldersDialog();
-                await RootFoldersDialog.ShowAsync();
+                await ContentDialogPresenter.ShowAsync(RootFoldersDialog);
                 return RootFolderStore.Folders.Count > 0;
             }
             finally

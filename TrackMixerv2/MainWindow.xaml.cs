@@ -739,7 +739,7 @@ namespace TrackMixerv2
                     CloseButtonText = "Dismiss"
                 };
 
-                await ffmpegMissingDialog.ShowAsync();
+                await ContentDialogPresenter.ShowAsync(ffmpegMissingDialog);
                 return;
             }
 
@@ -879,7 +879,7 @@ namespace TrackMixerv2
                 }
             };
 
-            var result = await dialog.ShowAsync();
+            var result = await ContentDialogPresenter.ShowAsync(dialog);
 
             if (result == ContentDialogResult.Primary)
             {
