@@ -594,6 +594,7 @@
                                                     </AppBarButton.Icon>
                                                 </AppBarButton>
                                                 <AppBarButton x:Name="AutoplayButton"
+                                                              AutomationProperties.AutomationId="AutoplayButton"
                                                               Style="{StaticResource AppBarButtonStyle}"
                                                               MediaTransportControlsHelper.DropoutOrder="8"
                                                               ToolTipService.ToolTip="Select autoplay mode">
@@ -615,6 +616,7 @@
                                                         <MenuFlyout Placement="Top"
                                                                     MenuFlyoutPresenterStyle="{StaticResource CompactMenuFlyoutPresenterStyle}">
                                                             <RadioMenuFlyoutItem x:Name="AutoplayForwardOption"
+                                                              AutomationProperties.AutomationId="AutoplayForwardOption"
                                                                                  Style="{StaticResource CompactSelectionFlyoutRadioItemStyle}"
                                                                                  Text="Forward"
                                                                                  GroupName="AutoplayMode"
@@ -635,6 +637,7 @@
                                                 </AppBarButton>
                                                 <!-- Not named PlaybackRateButton — MTC hijacks that name and replaces the flyout. -->
                                                 <AppBarButton x:Name="SpeedSelectButton"
+                                                              AutomationProperties.AutomationId="SpeedSelectButton"
                                                               Style="{StaticResource AppBarButtonStyle}"
                                                               MediaTransportControlsHelper.DropoutOrder="10"
                                                               ToolTipService.ToolTip="Playback speed">

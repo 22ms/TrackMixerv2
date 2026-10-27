@@ -16,7 +16,7 @@ if (-not (Test-Path $exe)) {
     throw "Build output not found: $exe"
 }
 
-Get-Process TrackMixerv2 -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process TrackMixerv2 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
 
 $env:TRACKMIXER_UITEST = "1"
 $env:TRACKMIXER_SUPPRESS_ROOT_PROMPT = "1"
@@ -32,7 +32,7 @@ $proc = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassTh
 $stableSeconds = 0
 for ($i = 1; $i -le 15; $i++) {
     Start-Sleep -Seconds 1
-    $alive = Get-Process TrackMixerv2 -ErrorAction SilentlyContinue
+    $alive = Get-Process TrackMixerv2 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe }
     if ($proc.HasExited -and -not $alive) {
         $crashLog = Join-Path $env:TEMP "TrackMixer-uitest-crash.txt"
         $detail = if (Test-Path $crashLog) { Get-Content $crashLog -Raw } else { "no managed crash log" }
@@ -57,7 +57,7 @@ if ($stableSeconds -lt 3) {
 Write-Host "You should see the window now. Press Enter here to close the app."
 [void][System.Console]::ReadLine()
 
-Get-Process TrackMixerv2 -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process TrackMixerv2 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 
 Remove-Item Env:TRACKMIXER_UITEST -ErrorAction SilentlyContinue

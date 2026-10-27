@@ -90,7 +90,11 @@ namespace TrackMixerv2
             MainMediaPlayer.DragStarting += MainMediaPlayer_DragStarting;
             customMixedMediaPlayerControl.Loaded += (_, _) => HookControlEvents();
             if (UiTestBootstrap.IsEnabled)
+            {
                 PlaybackDiagnostics.Visibility = Visibility.Visible;
+                // While auto-hidden the bar drops pointer input, which made wheel tests flaky.
+                customMixedMediaPlayerControl.ShowAndHideAutomatically = false;
+            }
         }
 
         public string? CurrentVideo => currentVideo;
@@ -279,7 +283,9 @@ namespace TrackMixerv2
 
         private static MediaPlayer CreatePlayer()
         {
-            var player = new MediaPlayer { AutoPlay = false };
+            // UI test runs happen on the developer's machine and must stay silent; volume
+            // still reflects the sliders, so tests can check it.
+            var player = new MediaPlayer { AutoPlay = false, IsMuted = UiTestBootstrap.IsEnabled };
             player.CommandManager.IsEnabled = false;
             return player;
         }

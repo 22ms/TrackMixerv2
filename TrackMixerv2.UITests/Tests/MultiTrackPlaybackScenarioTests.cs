@@ -1,3 +1,4 @@
+using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using TrackMixerv2.UITests.Infrastructure;
@@ -64,7 +65,10 @@ public sealed class MultiTrackPlaybackScenarioTests : IDisposable
 
         // Simulate the application losing and regaining foreground focus.
         _session.MinimizeWindow();
-        Thread.Sleep(600);
+        UiWait.UntilTrue(
+            () => _session.MainWindow.Patterns.Window.Pattern.WindowVisualState.Value == WindowVisualState.Minimized,
+            TimeSpan.FromSeconds(5),
+            "window to minimize");
         _session.RestoreWindow();
 
         _session.ClickPlayPause();
@@ -105,27 +109,24 @@ public sealed class MultiTrackPlaybackScenarioTests : IDisposable
     }
 
     [Fact]
-    public void Play_pause_after_seek_forward_does_not_crash()
+    public void Seek_forward_then_play_keeps_every_track_on_the_new_position()
     {
         WaitForAllTracksLoaded();
-
         _session.EnsurePaused();
+        double before = _session.GetDiagnostics()!.Position;
 
-        // Simulate the user seeking forward via keyboard shortcut (Right arrow).
-        // This exercises FastForward across all auxiliary players.
         _session.MainWindow.Focus();
         Keyboard.Type(VirtualKeyShort.RIGHT);
-        Thread.Sleep(300);
+        _session.WaitForDiagnostics(
+            d => d.Position >= before + LocalSettingsStore.DefaultSkipSeconds - 0.2,
+            "skip forward");
 
         _session.ClickPlayPause();
-        UiWait.UntilTrue(
-            () => _session.IsPlaying(),
-            TimeSpan.FromSeconds(10),
-            "playback to start after seek");
+        var playing = _session.WaitForDiagnostics(
+            d => d.IsRunning && d.Tracks.All(t => t.State == "Playing"),
+            "all tracks playing after the seek");
 
-        Assert.True(_session.IsPlaying());
-        Assert.False(_session.Application.HasExited);
-        Assert.Equal(TrackMixerPaths.FixtureAudioTrackCount, _session.GetVolumeSliderCount());
+        Assert.True(playing.Spread < 0.05, $"tracks drifted apart: {playing}");
     }
 
     public void Dispose() => _session.Dispose();

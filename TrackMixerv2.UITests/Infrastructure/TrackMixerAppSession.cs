@@ -2,8 +2,11 @@ using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using System.Diagnostics;
-using System.Threading;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using TrackMixerv2;
 
 namespace TrackMixerv2.UITests.Infrastructure;
@@ -44,9 +47,9 @@ public sealed class TrackMixerAppSession : IDisposable
     public void Launch()
     {
         EnsureIsolatedTestStorage();
-        KillExistingInstances();
-
         string exePath = TrackMixerPaths.ResolveExePath();
+        KillTestBuildInstances(exePath);
+
         var startInfo = new ProcessStartInfo(exePath)
         {
             UseShellExecute = false,
@@ -78,6 +81,9 @@ public sealed class TrackMixerAppSession : IDisposable
             TimeSpan.FromSeconds(30),
             "main application window");
 
+        // Windows cascades every new window further down, so after a dozen launches the
+        // lower half of the page sat off screen. Maximized gives every test the same layout.
+        MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Maximized);
         MainWindow.Focus();
     }
 
@@ -97,7 +103,7 @@ public sealed class TrackMixerAppSession : IDisposable
         {
         }
 
-        KillExistingInstances();
+        KillTestBuildInstances(TrackMixerPaths.ResolveExePath());
     }
 
     public AutomationElement? FindByAutomationId(string automationId, AutomationElement? root = null)
@@ -160,6 +166,13 @@ public sealed class TrackMixerAppSession : IDisposable
             "delete confirmation Yes button");
 
         confirmButton.Invoke();
+
+        // A flyout that is still closing ignores the next open, so a quick second delete
+        // would do nothing. Wait until it is gone, as a person would.
+        UiWait.UntilTrue(
+            () => FindByAutomationId("DeleteVideoConfirmButton") == null,
+            TimeSpan.FromSeconds(10),
+            "delete confirmation to close");
     }
 
     public bool MixerPageIsLoaded() => FindByAutomationId("RatingSlider") != null;
@@ -212,8 +225,11 @@ public sealed class TrackMixerAppSession : IDisposable
     /// </summary>
     public void RestoreWindow()
     {
-        MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
-        Thread.Sleep(300);
+        MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Maximized);
+        UiWait.UntilTrue(
+            () => MainWindow.Patterns.Window.Pattern.WindowVisualState.Value == WindowVisualState.Maximized,
+            TimeSpan.FromSeconds(5),
+            "window to restore");
         MainWindow.Focus();
     }
 
@@ -229,7 +245,7 @@ public sealed class TrackMixerAppSession : IDisposable
     }
 
     public string? GetKeybindShortcut(string action) =>
-        FindByAutomationId($"KeybindShortcut_{action}")?.Name;
+        FindByAutomationId($"KeybindShortcut_{action}")?.Properties.Name.ValueOrDefault;
 
     public int GetVolumeSliderCount()
     {
@@ -307,21 +323,107 @@ public sealed class TrackMixerAppSession : IDisposable
         SetTestStorageDirectory(_ownedTestHomeDirectory);
     }
 
-    private static void KillExistingInstances()
+    /// <summary>
+    /// Only the UI-test build is killed; an installed TrackMixer the developer has open
+    /// runs from a different path and is left alone.
+    /// </summary>
+    private static void KillTestBuildInstances(string exePath)
     {
         foreach (var process in Process.GetProcessesByName("TrackMixerv2"))
         {
             try
             {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(2000);
-                }
+                if (process.HasExited
+                    || !string.Equals(process.MainModule?.FileName, exePath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(2000);
             }
             catch
             {
             }
+        }
+    }
+
+    /// <summary>The app's playback state, published in UI-test mode by MixedMediaPlayer.</summary>
+    public PlaybackDiagnostics? GetDiagnostics()
+    {
+        string? json = FindByAutomationId("PlaybackDiagnostics")?.Properties.Name.ValueOrDefault;
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<PlaybackDiagnostics>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public PlaybackDiagnostics WaitForDiagnostics(Func<PlaybackDiagnostics, bool> condition, string description, double seconds = 15)
+    {
+        PlaybackDiagnostics? last = null;
+        try
+        {
+            return UiWait.Until(
+                () => (last = GetDiagnostics()) is PlaybackDiagnostics diagnostics && condition(diagnostics) ? diagnostics : null,
+                TimeSpan.FromSeconds(seconds),
+                description);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new TimeoutException($"{ex.Message} Last state: {last}", ex);
+        }
+    }
+
+    public void SetRangeValue(string automationId, double value)
+    {
+        var element = FindByAutomationId(automationId)
+            ?? throw new InvalidOperationException($"'{automationId}' not found.");
+        element.Patterns.RangeValue.Pattern.SetValue(value);
+    }
+
+    public AutomationElement Require(string automationId) =>
+        UiWait.Until(() => FindByAutomationId(automationId), TimeSpan.FromSeconds(10), automationId);
+
+    public void ScrollOver(string automationId, int notches)
+    {
+        var bounds = Require(automationId).BoundingRectangle;
+        Mouse.MoveTo(new System.Drawing.Point(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2));
+        // A real wheel sends one event per notch; FlaUI would send all notches as one.
+        for (int i = 0; i < Math.Abs(notches); i++)
+        {
+            Mouse.Scroll(Math.Sign(notches));
+            Wait.UntilInputIsProcessed();
+        }
+    }
+
+    /// <summary>
+    /// MediaPlayerElement is not in the UIA control view, so this clicks the video area
+    /// just above the transport bar.
+    /// </summary>
+    public void ClickVideo()
+    {
+        var bar = Require("ProgressSlider").BoundingRectangle;
+        Mouse.Click(new System.Drawing.Point(bar.X + bar.Width / 2, bar.Y - 150));
+        Wait.UntilInputIsProcessed();
+    }
+
+    public void HoldKey(VirtualKeyShort key, TimeSpan duration, Action? whileHeld = null)
+    {
+        Keyboard.Press(key);
+        try
+        {
+            Wait.UntilInputIsProcessed();
+            whileHeld?.Invoke();
+            Thread.Sleep(duration);
+        }
+        finally
+        {
+            Keyboard.Release(key);
         }
     }
 
@@ -339,33 +441,29 @@ public sealed class TrackMixerAppSession : IDisposable
         {
         }
 
-        Window? namedWindow = FindWindowByName("Track Mixer UI Test")
-            ?? FindWindowByName("Track Mixer");
-        if (namedWindow != null)
-            return namedWindow;
-
-        return Application.GetAllTopLevelWindows(Automation).FirstOrDefault();
+        return AppWindows().FirstOrDefault();
     }
 
-    private Window? FindWindowByName(string windowName)
+    // Only the app's own windows: walking the whole desktop is slow, can time out on other
+    // apps, and must never click buttons in them.
+    private Window[] AppWindows()
     {
-        var desktop = Automation.GetDesktop();
-        var element = desktop.FindFirstDescendant(Automation.ConditionFactory.ByName(windowName));
-        return element?.AsWindow();
+        try
+        {
+            return Application.GetAllTopLevelWindows(Automation);
+        }
+        catch (COMException)
+        {
+            return [];
+        }
     }
 
     private Button? FindConfirmDeleteYesButton()
     {
-        foreach (AutomationElement element in Automation.GetDesktop().FindAllDescendants(
-                     Automation.ConditionFactory.ByName("Yes")))
+        foreach (Window window in AppWindows())
         {
-            try
-            {
-                return element.AsButton();
-            }
-            catch
-            {
-            }
+            if (window.FindFirstDescendant(Automation.ConditionFactory.ByName("Yes")) is AutomationElement yes)
+                return yes.AsButton();
         }
 
         return null;
@@ -373,13 +471,11 @@ public sealed class TrackMixerAppSession : IDisposable
 
     private void DismissBlockingDialogs()
     {
-        var desktop = Automation.GetDesktop();
-        foreach (var dialog in desktop.FindAllDescendants(Automation.ConditionFactory.ByControlType(ControlType.Window)))
+        foreach (Window window in AppWindows())
         {
             try
             {
-                var dismiss = dialog.FindFirstDescendant(Automation.ConditionFactory.ByName("Dismiss"));
-                dismiss?.AsButton()?.Invoke();
+                window.FindFirstDescendant(Automation.ConditionFactory.ByName("Dismiss"))?.AsButton()?.Invoke();
             }
             catch
             {

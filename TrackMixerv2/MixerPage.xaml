@@ -391,6 +391,7 @@
                                             VerticalAlignment="Center"
                                             Margin="0,0,4,0"/>
                                     <NumberBox x:Name="PlaylistFilterTimeValue"
+                                               AutomationProperties.AutomationId="PlaylistFilterTimeValue"
                                                CornerRadius="4,0,0,4"
                                                Visibility="Collapsed"
                                                Value="30"
@@ -410,6 +411,7 @@
                                         <x:String>Years</x:String>
                                     </ComboBox>
                                     <DropDownButton x:Name="PlaylistFilterDropdown"
+                                                      AutomationProperties.AutomationId="PlaylistFilterDropdown"
                                                       ToolTipService.ToolTip="Playlist sort mode"
                                                       CornerRadius="4,0,0,4"
                                                       Padding="8,6">
@@ -420,12 +422,14 @@
                                             <MenuFlyout Placement="Top"
                                                         MenuFlyoutPresenterStyle="{StaticResource CompactMenuFlyoutPresenterStyle}">
                                                 <RadioMenuFlyoutItem x:Name="PlaylistFilterChrono"
+                                                                     AutomationProperties.AutomationId="PlaylistFilterChrono"
                                                                      Style="{StaticResource CompactSelectionFlyoutRadioItemStyle}"
                                                                      Text="Chrono"
                                                                      GroupName="PlaylistFilter"
                                                                      Tag="chrono"
                                                                      IsChecked="True" />
                                                 <RadioMenuFlyoutItem x:Name="PlaylistFilterRating"
+                                                                     AutomationProperties.AutomationId="PlaylistFilterRating"
                                                                      Style="{StaticResource CompactSelectionFlyoutRadioItemStyle}"
                                                                      Text="Rating"
                                                                      GroupName="PlaylistFilter"

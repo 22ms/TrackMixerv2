@@ -85,7 +85,7 @@ public sealed class GlobalKeybindScenarioTests : IDisposable
         for (int cycle = 1; cycle <= 3; cycle++)
         {
             _session.ClickTabHeader();
-            Thread.Sleep(300);
+            Wait.UntilInputIsProcessed();
             Keyboard.Type(VirtualKeyShort.SPACE);
             UiWait.UntilTrue(
                 () => _session.IsPlaying(),
@@ -104,18 +104,18 @@ public sealed class GlobalKeybindScenarioTests : IDisposable
     }
 
     [Fact]
-    public void Arrow_keys_after_tab_header_click_do_not_crash_and_preserve_tab_count()
+    public void Arrow_keys_after_tab_header_click_seek_by_the_skip_amount()
     {
-        // Arrow keys must never crash the app, regardless of what was clicked last.
+        _session.EnsurePaused();
+        _session.SetRangeValue("ProgressSlider", 8);
+        _session.WaitForDiagnostics(d => Math.Abs(d.Position - 8) < 0.2, "seek to 8 s");
         _session.ClickTabHeader();
 
-        Keyboard.Type(VirtualKeyShort.LEFT);
-        Thread.Sleep(200);
         Keyboard.Type(VirtualKeyShort.RIGHT);
-        Thread.Sleep(200);
+        _session.WaitForDiagnostics(d => Math.Abs(d.Position - (8 + LocalSettingsStore.DefaultSkipSeconds)) < 0.2, "Right to skip forward");
 
-        Assert.False(_session.Application.HasExited,
-            "application must remain running after arrow keys following a tab-header click.");
+        Keyboard.Type(VirtualKeyShort.LEFT);
+        _session.WaitForDiagnostics(d => Math.Abs(d.Position - 8) < 0.2, "Left to skip back");
         Assert.Equal(1, _session.GetTabCount());
     }
 

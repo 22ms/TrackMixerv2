@@ -43,5 +43,14 @@ public sealed class MultiTrackScenarioTests
 
         Assert.InRange(track0.Value, 19, 21);
         Assert.InRange(track2.Value, 79, 81);
+
+        // Each slider must drive its own track's player, whatever order the players opened in.
+        var diagnostics = _fixture.Session.WaitForDiagnostics(
+            d => d.Tracks.Count == TrackMixerPaths.FixtureAudioTrackCount
+                && Math.Abs((d.Tracks[0].Volume ?? -1) - 0.2) < 0.01
+                && Math.Abs((d.Tracks[2].Volume ?? -1) - 0.8) < 0.01,
+            "player volumes to follow their sliders");
+        Assert.Equal(1.0, diagnostics.Tracks[1].Volume ?? -1, 2);
+        Assert.Equal(1.0, diagnostics.Tracks[3].Volume ?? -1, 2);
     }
 }

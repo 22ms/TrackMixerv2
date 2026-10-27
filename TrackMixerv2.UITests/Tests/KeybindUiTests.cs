@@ -55,7 +55,7 @@ public sealed class KeybindUiTests : IDisposable
     {
         _session.ClickKeybindCell("SpeedBoost");
         Keyboard.Press(VirtualKeyShort.SHIFT);
-        Thread.Sleep(100);
+        Wait.UntilInputIsProcessed();
         Keyboard.Release(VirtualKeyShort.SHIFT);
 
         UiWait.UntilTrue(
