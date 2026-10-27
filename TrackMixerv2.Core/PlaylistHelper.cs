@@ -90,14 +90,12 @@ public class PlaylistHelper
         string? rootFolder = ResolveRootFolder(playlistConfig, currentFile);
         if (rootFolder == null) return null;
 
-        DateTime afterThis = DateTime.Now.Subtract(playlistConfig.TimeSpan);
-        PlaylistIndex playlist = PlaylistIndexCache.GetRating(rootFolder, afterThis);
+        PlaylistIndex playlist = PlaylistIndexCache.GetRating(rootFolder, playlistConfig.TimeSpan);
         if (playlist.OrderedPaths.Count <= 0) return null;
 
         bool ratingAboveZero = AppState.TRACK_METADATA.TryGetValue(currentFile, out TrackMetadata? metadata)
             && metadata.Rating > 0;
-        bool hasIndex = playlist.TryGetIndex(currentFile, out int currentIndex);
-        if (hasIndex && ratingAboveZero) return null;
+        if (playlist.TryGetIndex(currentFile, out _) && ratingAboveZero) return null;
         return playlist.OrderedPaths[0];
     }
 
@@ -127,7 +125,7 @@ public class PlaylistHelper
                 playlist = PlaylistIndexCache.GetChronoOrRebuild(rootFolder, currentFile);
                 break;
             case PlaylistMode.Rating:
-                playlist = PlaylistIndexCache.GetRating(rootFolder, DateTime.Now.Subtract(playlistConfig.TimeSpan));
+                playlist = PlaylistIndexCache.GetRating(rootFolder, playlistConfig.TimeSpan);
                 break;
             default:
                 return null;
@@ -168,7 +166,7 @@ public class PlaylistHelper
             TimeUnit.Week => TimeSpan.FromDays(value * 7),
             TimeUnit.Month => TimeSpan.FromDays(value * 30),
             TimeUnit.Year => TimeSpan.FromDays(value * 365),
-            _ => TimeSpan.FromDays(31),
+            _ => TimeSpan.FromDays(value * 30),
         };
     }
 
@@ -197,7 +195,7 @@ public class PlaylistHelper
                 PlaylistIndexCache.GetChronoOrRebuild(rootFolder, currentFile);
                 break;
             case PlaylistMode.Rating:
-                PlaylistIndexCache.GetRating(rootFolder, DateTime.Now.Subtract(playlistConfig.TimeSpan));
+                PlaylistIndexCache.GetRating(rootFolder, playlistConfig.TimeSpan);
                 break;
         }
     }

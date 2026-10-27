@@ -1,83 +1,99 @@
+using TrackMixerv2;
+
 namespace TrackMixerv2.ScenarioTests.Scenarios;
 
+[Collection(AppStateCollection.Name)]
 public sealed class RootFolderStoreScenarioTests : IDisposable
 {
-    readonly string? _previousRootFolders;
-    readonly List<string>? _previousAppStateFolders;
-    readonly bool _previousPersistToUserEnvironment;
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "TrackMixerScenarioTests", Guid.NewGuid().ToString("N"));
+    private readonly string? _previousProcessValue = Environment.GetEnvironmentVariable(AppPaths.RootFoldersEnvVar);
 
     public RootFolderStoreScenarioTests()
     {
-        _previousRootFolders = Environment.GetEnvironmentVariable(
-            AppPaths.RootFoldersEnvVar, EnvironmentVariableTarget.User);
-        _previousAppStateFolders = AppState.ROOT_FOLDERS;
-        _previousPersistToUserEnvironment = RootFolderStore.PersistToUserEnvironment;
         AppState.Reset();
         AppState.ROOT_FOLDERS = new List<string>();
-        RootFolderStore.PersistToUserEnvironment = false;
+        RootFolderStore.PersistTarget = EnvironmentVariableTarget.Process;
+        Directory.CreateDirectory(_root);
     }
 
     public void Dispose()
     {
-        RootFolderStore.PersistToUserEnvironment = _previousPersistToUserEnvironment;
-        Environment.SetEnvironmentVariable(
-            AppPaths.RootFoldersEnvVar, _previousRootFolders, EnvironmentVariableTarget.User);
-        AppState.ROOT_FOLDERS = _previousAppStateFolders;
+        RootFolderStore.FlushAsync().Wait();
+        RootFolderStore.PersistTarget = EnvironmentVariableTarget.User;
+        Environment.SetEnvironmentVariable(AppPaths.RootFoldersEnvVar, _previousProcessValue);
+        AppState.Reset();
+        Directory.Delete(_root, recursive: true);
     }
 
     [Fact]
     public void Add_normalizes_path_and_rejects_duplicates()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "TrackMixerRootStoreTest");
-        Directory.CreateDirectory(folder);
+        string folder = Folder("Clips");
 
-        Assert.True(RootFolderStore.Add(folder));
-        Assert.Single(RootFolderStore.Folders);
-        Assert.Equal(Path.GetFullPath(folder), RootFolderStore.Folders[0]);
+        Assert.True(RootFolderStore.Add(folder + Path.DirectorySeparatorChar));
+        Assert.Equal(Path.GetFullPath(folder), Assert.Single(RootFolderStore.Folders));
 
-        Assert.False(RootFolderStore.Add(folder));
+        Assert.False(RootFolderStore.Add(folder.ToUpperInvariant()));
         Assert.Single(RootFolderStore.Folders);
     }
 
     [Fact]
     public void Remove_drops_folder_and_leaves_others()
     {
-        string first = Path.Combine(Path.GetTempPath(), "TrackMixerRootA");
-        string second = Path.Combine(Path.GetTempPath(), "TrackMixerRootB");
-        Directory.CreateDirectory(first);
-        Directory.CreateDirectory(second);
-
+        string first = Folder("A");
+        string second = Folder("B");
         RootFolderStore.Add(first);
         RootFolderStore.Add(second);
-        Assert.Equal(2, RootFolderStore.Folders.Count);
 
         Assert.True(RootFolderStore.Remove(first));
-        Assert.Single(RootFolderStore.Folders);
-        Assert.Equal(Path.GetFullPath(second), RootFolderStore.Folders[0]);
+        Assert.Equal(Path.GetFullPath(second), Assert.Single(RootFolderStore.Folders));
+        Assert.False(RootFolderStore.Remove(first));
     }
 
     [Fact]
-    public void EnsureLoaded_strips_test_artifact_folders_from_environment()
+    public async Task Rapid_changes_persist_in_order_so_the_last_one_wins()
     {
-        string leaked = Path.Combine(Path.GetTempPath(), "TrackMixerRootB");
-        string real = @"D:\Clips";
-        Environment.SetEnvironmentVariable(
-            AppPaths.RootFoldersEnvVar,
-            $"{leaked};{real}",
-            EnvironmentVariableTarget.Process);
+        string first = Folder("A");
+        string second = Folder("B");
+
+        RootFolderStore.Add(first);
+        RootFolderStore.Remove(first);
+        RootFolderStore.Add(second);
+        await RootFolderStore.FlushAsync();
+
+        Assert.Equal(Path.GetFullPath(second), Environment.GetEnvironmentVariable(AppPaths.RootFoldersEnvVar));
+
+        RootFolderStore.Remove(second);
+        await RootFolderStore.FlushAsync();
+        Assert.Null(Environment.GetEnvironmentVariable(AppPaths.RootFoldersEnvVar));
+    }
+
+    [Fact]
+    public void Changes_replace_the_list_instead_of_mutating_it()
+    {
+        IReadOnlyList<string> before = RootFolderStore.Folders;
+
+        RootFolderStore.Add(Folder("A"));
+
+        Assert.Empty(before);
+        Assert.Single(RootFolderStore.Folders);
+    }
+
+    [Fact]
+    public void EnsureLoaded_reads_semicolon_separated_folders()
+    {
+        Environment.SetEnvironmentVariable(AppPaths.RootFoldersEnvVar, @"D:\Clips; E:\Replays ;");
         AppState.ROOT_FOLDERS = null;
 
         RootFolderStore.EnsureLoaded();
 
-        Assert.Single(RootFolderStore.Folders);
-        Assert.Equal(real, RootFolderStore.Folders[0]);
+        Assert.Equal(new[] { @"D:\Clips", @"E:\Replays" }, RootFolderStore.Folders);
     }
 
-    [Fact]
-    public void IsKnownTestArtifactFolder_detects_temp_trackmixer_test_paths()
+    private string Folder(string name)
     {
-        string testFolder = Path.Combine(Path.GetTempPath(), "TrackMixerRootB");
-        Assert.True(RootFolderStore.IsKnownTestArtifactFolder(testFolder));
-        Assert.False(RootFolderStore.IsKnownTestArtifactFolder(@"D:\Videos\NVIDIA"));
+        string path = Path.Combine(_root, name);
+        Directory.CreateDirectory(path);
+        return path;
     }
 }

@@ -71,6 +71,8 @@ public static class PlaylistIndexCache
         FileTimeCache.Remove(filePath);
     }
 
+    // Indexes are built outside CacheLock: a scan of a large or sleeping drive must not block
+    // the UI thread, which also takes the lock. Two concurrent builds just race to the same result.
     public static PlaylistIndex GetChrono(string rootFolder)
     {
         string key = ChronoKey(rootFolder);
@@ -78,25 +80,28 @@ public static class PlaylistIndexCache
         {
             if (ChronoIndexes.TryGetValue(key, out PlaylistIndex? cached))
                 return cached;
-
-            cached = BuildChronoIndex(rootFolder);
-            ChronoIndexes[key] = cached;
-            return cached;
         }
+
+        PlaylistIndex built = BuildChronoIndex(rootFolder);
+        lock (CacheLock)
+            ChronoIndexes[key] = built;
+        return built;
     }
 
-    public static PlaylistIndex GetRating(string rootFolder, DateTime afterThis)
+    /// <summary>Clips created within <paramref name="window"/> (e.g. the last 30 days), best rated first.</summary>
+    public static PlaylistIndex GetRating(string rootFolder, TimeSpan window)
     {
-        string key = RatingKey(rootFolder, afterThis);
+        string key = RatingKey(rootFolder, window);
         lock (CacheLock)
         {
             if (RatingIndexes.TryGetValue(key, out PlaylistIndex? cached))
                 return cached;
-
-            cached = BuildRatingIndex(rootFolder, afterThis);
-            RatingIndexes[key] = cached;
-            return cached;
         }
+
+        PlaylistIndex built = BuildRatingIndex(rootFolder, DateTime.Now - window);
+        lock (CacheLock)
+            RatingIndexes[key] = built;
+        return built;
     }
 
     public static PlaylistIndex GetChronoOrRebuild(string rootFolder, string currentFile)
@@ -120,15 +125,26 @@ public static class PlaylistIndexCache
 
     private static string ChronoKey(string rootFolder) => NormalizeKey(rootFolder);
 
-    private static string RatingKey(string rootFolder, DateTime afterThis) =>
-        NormalizeKey(rootFolder) + "|" + afterThis.Ticks;
+    private static string RatingKey(string rootFolder, TimeSpan window) =>
+        NormalizeKey(rootFolder) + "|" + window.Ticks;
 
     private static string NormalizeKey(string path) =>
         Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     private static PlaylistIndex BuildChronoIndex(string rootFolder)
     {
-        var ordered = Directory.EnumerateFiles(rootFolder, "*.*", SearchOption.AllDirectories)
+        if (!Directory.Exists(rootFolder))
+            return CreateIndex([]);
+
+        // A root at a drive letter contains folders like "System Volume Information" that
+        // throw UnauthorizedAccessException; skip those instead of failing the whole scan.
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0,
+        };
+        var ordered = Directory.EnumerateFiles(rootFolder, "*", options)
             .Where(Helper.IsSupportedVideoPath)
             .Where(File.Exists)
             .Select(path => (path, created: FileTimeCache.GetCreationTime(path)))
@@ -142,24 +158,18 @@ public static class PlaylistIndexCache
 
     private static PlaylistIndex BuildRatingIndex(string rootFolder, DateTime afterThis)
     {
-        List<(string path, double rating)> matches = new();
-
+        List<(string path, double rating)> candidates;
         lock (AppState.TrackMetadataLock)
         {
-            foreach (KeyValuePair<string, TrackMetadata> pair in AppState.TRACK_METADATA)
-            {
-                if (!Helper.PathIsUnderDirectory(pair.Key, rootFolder))
-                    continue;
-
-                if (!File.Exists(pair.Key))
-                    continue;
-
-                if (FileTimeCache.GetCreationTime(pair.Key) <= afterThis)
-                    continue;
-
-                matches.Add((pair.Key, pair.Value.Rating));
-            }
+            candidates = AppState.TRACK_METADATA
+                .Where(pair => Helper.PathIsUnderDirectory(pair.Key, rootFolder))
+                .Select(pair => (pair.Key, pair.Value.Rating))
+                .ToList();
         }
+
+        var matches = candidates
+            .Where(entry => File.Exists(entry.path) && FileTimeCache.GetCreationTime(entry.path) > afterThis)
+            .ToList();
 
         List<string> ordered = matches
             .OrderByDescending(entry => entry.rating)

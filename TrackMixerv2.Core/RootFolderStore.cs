@@ -2,10 +2,15 @@ namespace TrackMixerv2;
 
 public static class RootFolderStore
 {
+    private static readonly object PersistLock = new();
+    private static Task _persistChain = Task.CompletedTask;
+
     /// <summary>
-    /// Scenario tests must disable this so temp folders are not written to the real user profile.
+    /// Writing the User scope broadcasts WM_SETTINGCHANGE and can block for seconds, so it runs
+    /// in the background, one write after another so the last change always wins. Tests point
+    /// this at Process scope; UI-test runs never persist.
     /// </summary>
-    public static bool PersistToUserEnvironment { get; set; } = true;
+    public static EnvironmentVariableTarget PersistTarget { get; set; } = EnvironmentVariableTarget.User;
 
     public static IReadOnlyList<string> Folders
     {
@@ -22,32 +27,6 @@ public static class RootFolderStore
             return;
 
         AppState.ROOT_FOLDERS = UiTestBootstrap.ResolveRootFoldersFromEnvironment().ToList();
-        RemoveKnownTestArtifactFolders(persistIfChanged: true);
-    }
-
-    public static bool IsKnownTestArtifactFolder(string folder)
-    {
-        if (string.IsNullOrWhiteSpace(folder))
-            return false;
-
-        string fullPath = Path.GetFullPath(folder);
-        string tempRoot = Path.GetFullPath(Path.GetTempPath());
-        if (!fullPath.StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        string name = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        return name.StartsWith("TrackMixerRoot", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static void RemoveKnownTestArtifactFolders(bool persistIfChanged)
-    {
-        if (AppState.ROOT_FOLDERS == null || AppState.ROOT_FOLDERS.Count == 0)
-            return;
-
-        int before = AppState.ROOT_FOLDERS.Count;
-        AppState.ROOT_FOLDERS.RemoveAll(IsKnownTestArtifactFolder);
-        if (persistIfChanged && AppState.ROOT_FOLDERS.Count != before)
-            Persist();
     }
 
     public static bool Add(string folder)
@@ -56,13 +35,12 @@ public static class RootFolderStore
             return false;
 
         EnsureLoaded();
-        string normalized = Path.GetFullPath(folder);
-        var folders = AppState.ROOT_FOLDERS!;
-        if (folders.Any(existing =>
-                string.Equals(Path.GetFullPath(existing), normalized, StringComparison.OrdinalIgnoreCase)))
+        string normalized = Normalize(folder);
+        IReadOnlyList<string> folders = AppState.ROOT_FOLDERS!;
+        if (folders.Any(existing => PathsEqual(existing, normalized)))
             return false;
 
-        folders.Add(normalized);
+        AppState.ROOT_FOLDERS = [.. folders, normalized];
         Persist();
         PlaylistIndexCache.InvalidateChrono(normalized);
         return true;
@@ -74,34 +52,43 @@ public static class RootFolderStore
             return false;
 
         EnsureLoaded();
-        string normalized = Path.GetFullPath(folder);
-        int index = AppState.ROOT_FOLDERS!.FindIndex(existing =>
-            string.Equals(Path.GetFullPath(existing), normalized, StringComparison.OrdinalIgnoreCase));
-        if (index < 0)
+        string normalized = Normalize(folder);
+        IReadOnlyList<string> folders = AppState.ROOT_FOLDERS!;
+        string? removed = folders.FirstOrDefault(existing => PathsEqual(existing, normalized));
+        if (removed == null)
             return false;
 
-        string removed = AppState.ROOT_FOLDERS[index];
-        AppState.ROOT_FOLDERS.RemoveAt(index);
+        AppState.ROOT_FOLDERS = folders.Where(existing => !ReferenceEquals(existing, removed)).ToList();
         Persist();
         PlaylistIndexCache.InvalidateChrono(removed);
         return true;
     }
 
-    public static void Persist()
+    public static Task FlushAsync()
     {
-        if (!PersistToUserEnvironment)
-            return;
-
-        EnsureLoaded();
-        if (AppState.ROOT_FOLDERS!.Count == 0)
-        {
-            Task.Run(() => Environment.SetEnvironmentVariable(
-                AppPaths.RootFoldersEnvVar, null, EnvironmentVariableTarget.User));
-            return;
-        }
-
-        string value = string.Join(';', AppState.ROOT_FOLDERS);
-        Task.Run(() => Environment.SetEnvironmentVariable(
-            AppPaths.RootFoldersEnvVar, value, EnvironmentVariableTarget.User));
+        lock (PersistLock)
+            return _persistChain;
     }
+
+    private static void Persist()
+    {
+        if (UiTestBootstrap.IsEnabled)
+            return;
+
+        IReadOnlyList<string> folders = AppState.ROOT_FOLDERS!;
+        string? value = folders.Count == 0 ? null : string.Join(';', folders);
+        EnvironmentVariableTarget target = PersistTarget;
+        lock (PersistLock)
+        {
+            _persistChain = _persistChain.ContinueWith(
+                _ => Environment.SetEnvironmentVariable(AppPaths.RootFoldersEnvVar, value, target),
+                TaskScheduler.Default);
+        }
+    }
+
+    private static string Normalize(string folder) =>
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+
+    private static bool PathsEqual(string a, string normalizedB) =>
+        string.Equals(Normalize(a), normalizedB, StringComparison.OrdinalIgnoreCase);
 }

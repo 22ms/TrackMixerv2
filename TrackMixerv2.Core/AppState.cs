@@ -22,16 +22,21 @@ public static class AppState
             Environment.GetEnvironmentVariable(TrackMetadataJsonEnvVar),
             "track_metadata.json");
 
-    public static List<string>? ROOT_FOLDERS;
+    /// <summary>
+    /// Replaced, never mutated in place: the playlist prewarm thread iterates it while the
+    /// UI thread adds or removes folders.
+    /// </summary>
+    public static IReadOnlyList<string>? ROOT_FOLDERS;
     public static Dictionary<string, TrackMetadata> TRACK_METADATA = new(StringComparer.OrdinalIgnoreCase);
     public static bool RootFolderPromptSuppressed;
 
     public static string? RootFoldersContainFile(string? path)
     {
-        if (ROOT_FOLDERS == null || path == null)
+        IReadOnlyList<string>? folders = ROOT_FOLDERS;
+        if (folders == null || path == null)
             return null;
 
-        foreach (var folder in ROOT_FOLDERS)
+        foreach (var folder in folders)
         {
             if (Helper.PathIsUnderDirectory(path, folder))
                 return folder;

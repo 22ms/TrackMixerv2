@@ -300,7 +300,7 @@ namespace TrackMixerv2
             if (UiTestBootstrap.SuppressRootFolderPrompt)
                 RootFolderPromptSuppressed = true;
 
-            if (AppState.ROOT_FOLDERS.Count == 0 && launchFiles != null && launchFiles.Length > 0)
+            if (AppState.ROOT_FOLDERS!.Count == 0 && launchFiles != null && launchFiles.Length > 0)
             {
                 string? clipDirectory = Path.GetDirectoryName(launchFiles[0]);
                 if (!string.IsNullOrWhiteSpace(clipDirectory))

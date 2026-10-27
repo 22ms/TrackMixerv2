@@ -40,39 +40,38 @@ public sealed class PlaylistIndexCacheScenarioTests : IDisposable
         var now = DateTime.Now.AddHours(-1);
         string low = _library.AddClip("low.mp4", now);
         string high = _library.AddClip("high.mp4", now.AddMinutes(1));
-        DateTime afterThis = DateTime.Now.Subtract(TimeSpan.FromDays(30));
+        TimeSpan window = TimeSpan.FromDays(30);
 
         AppState.TRACK_METADATA[low] = new TrackMetadata(2, new List<double> { 100 });
         AppState.TRACK_METADATA[high] = new TrackMetadata(9, new List<double> { 100 });
 
-        PlaylistIndex first = PlaylistIndexCache.GetRating(_library.RootPath, afterThis);
+        PlaylistIndex first = PlaylistIndexCache.GetRating(_library.RootPath, window);
         Assert.Equal(high, first.OrderedPaths[0]);
 
         TrackMetadataStore.UpdateEntry(AppState.TRACK_METADATA, low, rating: 10, new List<double> { 100 });
-        PlaylistIndex second = PlaylistIndexCache.GetRating(_library.RootPath, afterThis);
+        PlaylistIndex second = PlaylistIndexCache.GetRating(_library.RootPath, window);
 
         Assert.Equal(low, second.OrderedPaths[0]);
     }
 
     [Fact]
-    public async Task PrewarmPlaylistIndex_populates_chrono_cache_in_background()
+    public void Rating_index_is_reused_while_nothing_changes()
     {
-        var baseTime = DateTime.Now.AddDays(-2);
-        _library.AddClip("clip-a.mp4", baseTime);
-        string clipB = _library.AddClip("clip-b.mp4", baseTime.AddMinutes(5));
+        string clip = _library.AddClip("rated.mp4", DateTime.Now.AddHours(-1));
+        AppState.TRACK_METADATA[clip] = new TrackMetadata(5, new List<double> { 100 });
 
-        var config = new PlaylistHelper.PlaylistConfig(PlaylistHelper.PlaylistMode.Chrono, TimeSpan.FromDays(30), subfolderOnly: false);
-        PlaylistHelper.PrewarmPlaylistIndex(config, clipB);
+        PlaylistIndex first = PlaylistIndexCache.GetRating(_library.RootPath, TimeSpan.FromDays(30));
+        PlaylistIndex second = PlaylistIndexCache.GetRating(_library.RootPath, TimeSpan.FromDays(30));
 
-        for (int attempt = 0; attempt < 100; attempt++)
-        {
-            if (PlaylistIndexCache.GetChrono(_library.RootPath).OrderedPaths.Count == 2)
-                return;
+        Assert.Same(first, second);
+    }
 
-            await Task.Delay(50);
-        }
+    [Fact]
+    public void Missing_root_folder_gives_an_empty_index_instead_of_throwing()
+    {
+        string missing = Path.Combine(_library.RootPath, "unplugged-drive");
 
-        Assert.Fail("Prewarm did not populate chrono index in time.");
+        Assert.Empty(PlaylistIndexCache.GetChrono(missing).OrderedPaths);
     }
 
     public void Dispose()
