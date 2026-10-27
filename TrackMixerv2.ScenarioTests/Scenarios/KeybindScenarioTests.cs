@@ -92,6 +92,32 @@ public sealed class KeybindScenarioTests : IDisposable
     }
 
     [Fact]
+    public void Fine_skips_default_to_shift_arrows_and_one_second()
+    {
+        KeybindStore.ResetCache();
+
+        Assert.Equal("Shift+←", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.FineRewind)));
+        Assert.Equal("Shift+→", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.FineForward)));
+        Assert.Equal("Fine rewind 1s", KeybindStore.GetActionLabel(KeybindAction.FineRewind));
+
+        LocalSettingsStore.SetFineSkipSeconds(3);
+        Assert.Equal("Fine forward 3s", KeybindStore.GetActionLabel(KeybindAction.FineForward));
+    }
+
+    [Fact]
+    public void A_new_default_never_takes_a_chord_the_user_already_saved()
+    {
+        LocalSettingsStore.SetString(
+            KeybindStore.Keys.KeybindsJson,
+            """{"NewTab":{"Key":37,"Modifiers":1}}""");
+        KeybindStore.ResetCache();
+
+        Assert.Equal("Shift+←", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.NewTab)));
+        Assert.Equal("Not set", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.FineRewind)));
+        Assert.Equal("Shift+→", KeybindFormatter.Format(KeybindStore.Get(KeybindAction.FineForward)));
+    }
+
+    [Fact]
     public void Toggle_fullscreen_defaults_to_f11_and_rejects_escape()
     {
         KeybindStore.ResetCache();

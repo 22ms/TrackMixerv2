@@ -15,6 +15,8 @@ public enum KeybindAction
     NextTab,
     PreviousTab,
     ToggleFullscreen,
+    FineRewind,
+    FineForward,
 }
 
 public sealed class KeybindChord
@@ -49,6 +51,8 @@ public static class KeybindStore
           [KeybindAction.PlayPause] = new(0x20), // Space
           [KeybindAction.Rewind] = new(0x25), // Left
           [KeybindAction.FastForward] = new(0x27), // Right
+          [KeybindAction.FineRewind] = new(0x25, 1), // Left + Shift
+          [KeybindAction.FineForward] = new(0x27, 1), // Right + Shift
           [KeybindAction.SpeedBoost] = new(0xA0), // LeftShift
           [KeybindAction.SpeedSlow] = new(0xA2), // LeftControl
           [KeybindAction.NewTab] = new(0x54, 2), // T + Control
@@ -63,6 +67,8 @@ public static class KeybindStore
       (KeybindAction.PlayPause, "Play / pause"),
       (KeybindAction.Rewind, "Rewind"),
       (KeybindAction.FastForward, "Forward"),
+      (KeybindAction.FineRewind, "Fine rewind"),
+      (KeybindAction.FineForward, "Fine forward"),
       (KeybindAction.SpeedBoost, "Speed boost (hold)"),
       (KeybindAction.SpeedSlow, "Slow motion (hold)"),
       (KeybindAction.NewTab, "New tab"),
@@ -89,6 +95,8 @@ public static class KeybindStore
       {
         KeybindAction.Rewind => $"Rewind {LocalSettingsStore.GetSkipSeconds()}s",
         KeybindAction.FastForward => $"Forward {LocalSettingsStore.GetSkipSeconds()}s",
+        KeybindAction.FineRewind => $"Fine rewind {LocalSettingsStore.GetFineSkipSeconds()}s",
+        KeybindAction.FineForward => $"Fine forward {LocalSettingsStore.GetFineSkipSeconds()}s",
         KeybindAction.SpeedBoost => $"Speed boost {PlaybackRates.Format(LocalSettingsStore.GetSpeedBoostRate())} (hold)",
         KeybindAction.SpeedSlow => $"Slow motion {PlaybackRates.Format(LocalSettingsStore.GetSpeedSlowRate())} (hold)",
         _ => label,
@@ -169,6 +177,8 @@ public static class KeybindStore
       if (parsed == null)
         return loaded;
 
+      var saved = new HashSet<KeybindAction>();
+
       foreach (var pair in parsed)
       {
         string actionName = pair.Key == "ExitFullscreen" ? nameof(KeybindAction.ToggleFullscreen) : pair.Key;
@@ -185,6 +195,14 @@ public static class KeybindStore
           continue;
 
         loaded[action] = chord;
+        saved.Add(action);
+      }
+
+      // An action added in an update must not take over a chord the user already picked.
+      foreach (KeybindAction action in loaded.Keys.Where(action => !saved.Contains(action)).ToList())
+      {
+        if (saved.Any(other => SameChord(loaded[other], loaded[action])))
+          loaded[action] = new KeybindChord();
       }
     }
     catch

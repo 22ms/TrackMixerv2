@@ -20,6 +20,9 @@ public static class KeybindFormatter
 
   public static string Format(KeybindChord chord)
   {
+    if (chord.Key == 0)
+      return "Not set";
+
     if (KeybindHoldRules.IsModifierOnlyChord(chord))
       return FormatKey(KeybindHoldRules.NormalizeModifierKey(chord.Key));
 

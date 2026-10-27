@@ -13,6 +13,7 @@ public static class LocalSettingsStore
         public const string DoubleClickOnNewTab = "DoubleClickOnNewTab";
         public const string DragAndDropOnNewTab = "DragAndDropOnNewTab";
         public const string SkipSeconds = "SkipSeconds";
+        public const string FineSkipSeconds = "FineSkipSeconds";
         // Legacy global multiplier; kept as the default for the per-slider keys below.
         public const string SliderWheelSpeed = "SliderWheelSpeed";
         public const string VolumeSliderStepSize = "VolumeSliderStepSize";
@@ -24,6 +25,7 @@ public static class LocalSettingsStore
     }
 
     public const int DefaultSkipSeconds = 5;
+    public const int DefaultFineSkipSeconds = 1;
     public const int DefaultSliderStepSize = 2;
     public const double DefaultSpeedBoostRate = 2.0;
     public const double DefaultSpeedSlowRate = 0.25;
@@ -94,6 +96,12 @@ public static class LocalSettingsStore
 
     public static void SetSkipSeconds(int seconds) =>
         Set(Keys.SkipSeconds, Math.Max(1, seconds));
+
+    public static int GetFineSkipSeconds() =>
+        Math.Max(1, GetInt(Keys.FineSkipSeconds, DefaultFineSkipSeconds));
+
+    public static void SetFineSkipSeconds(int seconds) =>
+        Set(Keys.FineSkipSeconds, Math.Max(1, seconds));
 
     public static int GetSliderStepSize(string key) =>
         Math.Max(1, GetInt(key, GetInt(Keys.SliderWheelSpeed, DefaultSliderStepSize)));

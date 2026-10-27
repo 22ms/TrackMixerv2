@@ -123,6 +123,7 @@ namespace TrackMixerv2
         private void PreferencesDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
         {
             NumberBoxHelper.SetValue(SkipSecondsNumberBox, LocalSettingsStore.GetSkipSeconds());
+            NumberBoxHelper.SetValue(FineSkipSecondsNumberBox, LocalSettingsStore.GetFineSkipSeconds());
             NumberBoxHelper.SetValue(VolumeStepSizeNumberBox, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize));
             NumberBoxHelper.SetValue(RatingStepSizeNumberBox, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize));
             NumberBoxHelper.SetValue(ProgressStepSizeNumberBox, LocalSettingsStore.GetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize));
@@ -131,6 +132,7 @@ namespace TrackMixerv2
         private void PreferencesDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
         {
             NumberBoxHelper.CommitTypedText(SkipSecondsNumberBox);
+            NumberBoxHelper.CommitTypedText(FineSkipSecondsNumberBox);
             NumberBoxHelper.CommitTypedText(VolumeStepSizeNumberBox);
             NumberBoxHelper.CommitTypedText(RatingStepSizeNumberBox);
             NumberBoxHelper.CommitTypedText(ProgressStepSizeNumberBox);
@@ -156,6 +158,7 @@ namespace TrackMixerv2
                     LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DragAndDropOnNewTab, DragAndDropCheckBox.IsChecked ?? false);
                     LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, DoubleClickCheckBox.IsChecked ?? false);
                     LocalSettingsStore.SetSkipSeconds((int)Math.Round(SkipSecondsNumberBox.Value));
+                    LocalSettingsStore.SetFineSkipSeconds((int)Math.Round(FineSkipSecondsNumberBox.Value));
                     LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.VolumeSliderStepSize, ReadWholeNumber(VolumeStepSizeNumberBox));
                     LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.RatingSliderStepSize, ReadWholeNumber(RatingStepSizeNumberBox));
                     LocalSettingsStore.SetSliderStepSize(LocalSettingsStore.Keys.ProgressSliderStepSize, ReadWholeNumber(ProgressStepSizeNumberBox));
@@ -1102,6 +1105,15 @@ namespace TrackMixerv2
         private static int GetSkipOffsetMillis() =>
             LocalSettingsStore.GetSkipSeconds() * 1000;
 
+        /// <summary>Negative seconds rewind.</summary>
+        internal void SkipFromKeybind(int seconds)
+        {
+            if (seconds < 0)
+                MixedMediaPlayer.Rewind(-seconds * 1000);
+            else
+                MixedMediaPlayer.FastForward(seconds * 1000);
+        }
+
         private async void ExportButton_Click(object sender, RoutedEventArgs e)
         {
             if (MainWindow.Instance != null)
@@ -1243,7 +1255,7 @@ namespace TrackMixerv2
 
         private void RefreshKeybindList()
         {
-            const int columns = 5;
+            const int columns = 6;
             var items = KeybindStore.DisplayOrder;
             int rows = (items.Count + columns - 1) / columns;
 

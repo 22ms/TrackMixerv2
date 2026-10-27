@@ -27,6 +27,9 @@ public static class KeybindFocusRules
         if (kind == FocusedControlKind.Dialog)
             return true;
 
+        if (kind == FocusedControlKind.TextEntry && IsTextEditingModifier(modifiers))
+            return true;
+
         if (modifiers != 0)
             return false;
 
@@ -101,17 +104,13 @@ public static class KeybindFocusRules
         if (kind == FocusedControlKind.Dialog)
             return true;
 
-        // Modified chords (Ctrl/Alt/Shift+key) are user-defined shortcuts; they pass
-        // through even from text boxes.
-        if (modifiers != 0)
-            return false;
-
-        // Bare keys in a text box belong to the text box.
-        if (kind == FocusedControlKind.TextEntry)
-            return true;
-
-        return false;
+        // Bare and Shift+ keys in a text box are typing and selecting (Shift+Left/Right);
+        // Ctrl/Alt chords are user-defined shortcuts and pass through even from text boxes.
+        return kind == FocusedControlKind.TextEntry && IsTextEditingModifier(modifiers);
     }
+
+    private static bool IsTextEditingModifier(int modifiers) =>
+        modifiers is 0 or ModifierShift;
 
     public static bool IsSliderNavigationKey(int virtualKey) =>
         virtualKey is 0x25 or 0x26 or 0x27 or 0x28 or 0x21 or 0x22 or 0x24 or 0x23;

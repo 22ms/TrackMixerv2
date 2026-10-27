@@ -120,6 +120,23 @@ public sealed class GlobalKeybindScenarioTests : IDisposable
     }
 
     [Fact]
+    public void Shift_arrows_seek_by_the_fine_skip_amount_without_speeding_up()
+    {
+        _session.EnsurePaused();
+        _session.SetRangeValue("ProgressSlider", 8);
+        _session.WaitForDiagnostics(d => Math.Abs(d.Position - 8) < 0.2, "seek to 8 s");
+        _session.ClickTabHeader();
+
+        Keyboard.TypeSimultaneously(VirtualKeyShort.SHIFT, VirtualKeyShort.RIGHT);
+        _session.WaitForDiagnostics(d => Math.Abs(d.Position - (8 + LocalSettingsStore.DefaultFineSkipSeconds)) < 0.2, "Shift+Right to skip forward");
+
+        Keyboard.TypeSimultaneously(VirtualKeyShort.SHIFT, VirtualKeyShort.LEFT);
+        Keyboard.TypeSimultaneously(VirtualKeyShort.SHIFT, VirtualKeyShort.LEFT);
+        var diagnostics = _session.WaitForDiagnostics(d => Math.Abs(d.Position - (8 - LocalSettingsStore.DefaultFineSkipSeconds)) < 0.2, "two Shift+Left to skip back");
+        Assert.Equal(1.0, diagnostics.Rate);
+    }
+
+    [Fact]
     public void Space_works_after_clicking_tab_strip_not_player()
     {
         // Simulates the most common scenario: user clicks somewhere in the chrome

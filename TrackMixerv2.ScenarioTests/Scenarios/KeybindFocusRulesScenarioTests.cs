@@ -17,6 +17,7 @@ public sealed class KeybindFocusRulesScenarioTests
     [InlineData(FocusedControlKind.Button, 0x25, 0, false)]
     [InlineData(FocusedControlKind.TextEntry, 0x41, 0, true)]
     [InlineData(FocusedControlKind.TextEntry, 0x41, 2, false)]
+    [InlineData(FocusedControlKind.TextEntry, 0x25, 1, true)]
     [InlineData(FocusedControlKind.None, 0x20, 0, false)]
     public void ShouldDefer_matches_winui_native_keys(
         FocusedControlKind kind,
@@ -122,6 +123,8 @@ public sealed class KeybindFocusRulesScenarioTests
     // Modified chords always pass through regardless of focus kind
     [InlineData(FocusedControlKind.Selector, 0x27, 2, false)]
     [InlineData(FocusedControlKind.TextEntry, 0x27, 2, false)]
+    [InlineData(FocusedControlKind.TextEntry, 0x27, 1, true)]  // Shift+Right selects text
+    [InlineData(FocusedControlKind.Slider, 0x27, 1, false)]    // Shift+Right fine-skips
     public void ShouldDeferGlobalMediaKeybind_applies_permissive_policy(
         FocusedControlKind kind,
         int virtualKey,

@@ -142,7 +142,7 @@ public static class KeybindApplicator
                 return;
         }
 
-        // Media keys (PlayPause, Rewind, FastForward) are dispatched globally so they
+        // Media keys (play/pause and the skips) are dispatched globally so they
         // work even when focus is on the TabView header or another non-MixerPage element.
         TryDispatchGlobalMediaKey(window, args);
     }
@@ -175,12 +175,7 @@ public static class KeybindApplicator
         if (KeybindFocusRules.ShouldDeferGlobalMediaKeybind(kind, (int)args.Key, modifiers))
             return;
 
-        MixerPage page = window.ActiveMixerPage;
-        if (TryHandleMixerPageAction(page, KeybindAction.PlayPause, args))
-            return;
-        if (TryHandleMixerPageAction(page, KeybindAction.Rewind, args))
-            return;
-        TryHandleMixerPageAction(page, KeybindAction.FastForward, args);
+        TryHandleMediaAction(window.ActiveMixerPage, args);
     }
 
     private static void HandleMixerPageKey(MixerPage page, KeyRoutedEventArgs args)
@@ -195,11 +190,25 @@ public static class KeybindApplicator
         if (!ShouldHandleKeybind(page.PageRootGrid, args))
             return;
 
-        if (TryHandleMixerPageAction(page, KeybindAction.PlayPause, args))
-            return;
-        if (TryHandleMixerPageAction(page, KeybindAction.Rewind, args))
-            return;
-        TryHandleMixerPageAction(page, KeybindAction.FastForward, args);
+        TryHandleMediaAction(page, args);
+    }
+
+    private static readonly KeybindAction[] MediaActions =
+    [
+        KeybindAction.PlayPause,
+        KeybindAction.Rewind,
+        KeybindAction.FastForward,
+        KeybindAction.FineRewind,
+        KeybindAction.FineForward,
+    ];
+
+    private static void TryHandleMediaAction(MixerPage page, KeyRoutedEventArgs args)
+    {
+        foreach (KeybindAction action in MediaActions)
+        {
+            if (TryHandleMixerPageAction(page, action, args))
+                return;
+        }
     }
 
     private static bool ShouldHandleKeybind(UIElement scope, KeyRoutedEventArgs args)
@@ -274,6 +283,12 @@ public static class KeybindApplicator
             case KeybindAction.FastForward:
                 page.FastForwardFromKeybind(null!, null!);
                 break;
+            case KeybindAction.FineRewind:
+                page.SkipFromKeybind(-LocalSettingsStore.GetFineSkipSeconds());
+                break;
+            case KeybindAction.FineForward:
+                page.SkipFromKeybind(LocalSettingsStore.GetFineSkipSeconds());
+                break;
         }
 
         args.Handled = true;
@@ -286,7 +301,7 @@ public static class KeybindApplicator
             return false;
 
         KeybindChord chord = KeybindStore.Get(action);
-        return (int)args.Key == chord.Key && KeybindChordCapture.GetCurrentModifiers() == chord.Modifiers;
+        return chord.Key != 0 && (int)args.Key == chord.Key && KeybindChordCapture.GetCurrentModifiers() == chord.Modifiers;
     }
 
     private static bool IsModifierKey(VirtualKey key) =>
