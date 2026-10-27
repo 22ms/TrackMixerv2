@@ -303,6 +303,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="72"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                         </Grid>
                         <Border Grid.Column="1"

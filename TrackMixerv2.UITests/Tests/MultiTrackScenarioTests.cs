@@ -52,5 +52,10 @@ public sealed class MultiTrackScenarioTests
             "player volumes to follow their sliders");
         Assert.Equal(1.0, diagnostics.Tracks[1].Volume ?? -1, 2);
         Assert.Equal(1.0, diagnostics.Tracks[3].Volume ?? -1, 2);
+
+        track0.Value = VolumeScale.ToPosition(160);
+        _fixture.Session.WaitForDiagnostics(
+            d => Math.Abs((d.Tracks[0].Volume ?? -1) - 1.6) < 0.01,
+            "track 0 to be boosted to 160%");
     }
 }

@@ -811,7 +811,7 @@ namespace TrackMixerv2
                 double savedValue = GetSavedSliderValue(trackIndex);
 
                 Slider panelSlider = CreateVolumeSlider(trackIndex, new Thickness(0, 6, 0, 6), $"VolumeSlider_{trackIndex}", $"{trackNameText} volume");
-                panelSlider.Value = savedValue;
+                panelSlider.Value = VolumeScale.ToPosition(savedValue);
                 MixedMediaPlayer.SetVolume(trackIndex, savedValue);
                 Slider? flyoutSlider = null;
 
@@ -820,7 +820,7 @@ namespace TrackMixerv2
                     if (syncingVolumeSliders)
                         return;
 
-                    OnTrackVolumeChanged(trackIndex, a.NewValue);
+                    OnTrackVolumeChanged(trackIndex, VolumeScale.ToVolume(a.NewValue));
                     SyncVolumeSlider(flyoutSlider, a.NewValue);
                 });
                 panelSlider.ValueChanged += panelSliderChangedHandler;
@@ -833,13 +833,13 @@ namespace TrackMixerv2
                     continue;
 
                 flyoutSlider = CreateVolumeSlider(trackIndex, new Thickness(0), $"VolumeFlyoutSlider_{trackIndex}", $"{trackNameText} volume");
-                flyoutSlider.Value = savedValue;
+                flyoutSlider.Value = VolumeScale.ToPosition(savedValue);
                 var flyoutSliderChangedHandler = new RangeBaseValueChangedEventHandler((_, a) =>
                 {
                     if (syncingVolumeSliders)
                         return;
 
-                    OnTrackVolumeChanged(trackIndex, a.NewValue);
+                    OnTrackVolumeChanged(trackIndex, VolumeScale.ToVolume(a.NewValue));
                     SyncVolumeSlider(panelSlider, a.NewValue);
                 });
                 flyoutSlider.ValueChanged += flyoutSliderChangedHandler;
@@ -879,17 +879,54 @@ namespace TrackMixerv2
                 IsTabStop = false,
                 UseSystemFocusVisuals = false,
                 Margin = margin,
-                TickFrequency = 5,
-                TickPlacement = TickPlacement.None,
+                TickFrequency = 100,
+                TickPlacement = TickPlacement.Inline,
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Maximum = 100,
+                Maximum = VolumeScale.MaxPosition,
                 Minimum = 0,
             };
+            volumeSlider.ValueChanged += (_, args) => ApplyBoostColor(volumeSlider, VolumeScale.ToVolume(args.NewValue));
             SliderWheelBehavior.SetStepSetting(volumeSlider, SliderStepSetting.Volume);
             AutomationProperties.SetAutomationId(volumeSlider, automationId);
             AutomationProperties.SetName(volumeSlider, accessibleName);
             return volumeSlider;
+        }
+
+        // Above 100% the track is amplified; the fill switches to the caution color so it
+        // is obvious at a glance which tracks are boosted.
+        private static void ApplyBoostColor(Slider slider, double volume)
+        {
+            if (volume > 100 && Application.Current.Resources["SystemFillColorCautionBrush"] is Brush caution)
+                slider.Foreground = caution;
+            else
+                slider.ClearValue(Control.ForegroundProperty);
+        }
+
+        private static TextBlock CreateVolumeReadout(Slider volumeSlider)
+        {
+            var readout = new TextBlock
+            {
+                FontSize = 11,
+                FontFamily = new FontFamily("Consolas"),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = TextAlignment.Right,
+                MinWidth = 32,
+            };
+
+            void Update(double position)
+            {
+                double volume = VolumeScale.ToVolume(position);
+                readout.Text = VolumeScale.Format(volume);
+                if (volume > 100 && Application.Current.Resources["SystemFillColorCautionBrush"] is Brush caution)
+                    readout.Foreground = caution;
+                else
+                    readout.ClearValue(TextBlock.ForegroundProperty);
+            }
+
+            Update(volumeSlider.Value);
+            volumeSlider.ValueChanged += (_, args) => Update(args.NewValue);
+            return readout;
         }
 
         private static void AddVolumeTrackToGrid(Grid grid, int row, string trackNameText, Slider volumeSlider)
@@ -909,8 +946,12 @@ namespace TrackMixerv2
             Grid.SetColumn(trackName, 0);
             Grid.SetRow(volumeSlider, row);
             Grid.SetColumn(volumeSlider, 1);
+            TextBlock readout = CreateVolumeReadout(volumeSlider);
+            Grid.SetRow(readout, row);
+            Grid.SetColumn(readout, 2);
             grid.Children.Add(trackName);
             grid.Children.Add(volumeSlider);
+            grid.Children.Add(readout);
         }
 
         private static Grid CreateVolumeRow(string trackNameText, Slider volumeSlider, double labelWidth)
@@ -932,10 +973,14 @@ namespace TrackMixerv2
             };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(labelWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            TextBlock readout = CreateVolumeReadout(volumeSlider);
             Grid.SetColumn(trackName, 0);
             Grid.SetColumn(volumeSlider, 1);
+            Grid.SetColumn(readout, 2);
             row.Children.Add(trackName);
             row.Children.Add(volumeSlider);
+            row.Children.Add(readout);
             return row;
         }
 
@@ -951,7 +996,7 @@ namespace TrackMixerv2
 
         public double[] GetVolumeLevels()
         {
-            return VolumeSliders.Select(slider => slider.Value).ToArray();
+            return VolumeSliders.Select(slider => VolumeScale.ToVolume(slider.Value)).ToArray();
         }
         public string GetCurrentPath()
         {
