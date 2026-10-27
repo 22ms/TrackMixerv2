@@ -1010,13 +1010,16 @@ namespace TrackMixerv2
                 path = this.path;
 
             suppressRatingSave = true;
-            if (AppState.TRACK_METADATA.ContainsKey(path))
+            if (AppState.TRACK_METADATA.TryGetValue(path, out TrackMetadata? metadata))
             {
-                CachedSliderValues = AppState.TRACK_METADATA[path].Sliders;
-                RatingSlider.Value = AppState.TRACK_METADATA[path].Rating;
+                // A copy: the slider handlers edit this list, which must not touch the saved
+                // entry (or another clip's) until SaveMetadata stores it.
+                CachedSliderValues = new List<double>(metadata.Sliders);
+                RatingSlider.Value = metadata.Rating;
             }
             else
             {
+                CachedSliderValues = new List<double>();
                 RatingSlider.Value = 0;
             }
             suppressRatingSave = false;
@@ -1030,7 +1033,15 @@ namespace TrackMixerv2
                 path = this.path;
 
             TrackMetadataStore.UpdateEntry(AppState.TRACK_METADATA, path, rating, CachedSliderValues);
-            await TrackMetadataStore.PersistAsync(AppState.TRACK_METADATA, AppState.TrackMetadataJson);
+            try
+            {
+                await TrackMetadataStore.PersistAsync(AppState.TRACK_METADATA, AppState.TrackMetadataJson);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The in-memory entry is kept and goes out with the next save.
+                Trace.WriteLine($"Saving track metadata failed: {ex.Message}");
+            }
         }
         public void PlayMedia()
         {

@@ -23,7 +23,7 @@ public static class AppState
             "track_metadata.json");
 
     public static List<string>? ROOT_FOLDERS;
-    public static Dictionary<string, TrackMetadata> TRACK_METADATA = new();
+    public static Dictionary<string, TrackMetadata> TRACK_METADATA = new(StringComparer.OrdinalIgnoreCase);
     public static bool RootFolderPromptSuppressed;
 
     public static string? RootFoldersContainFile(string? path)
@@ -43,7 +43,7 @@ public static class AppState
     public static void Reset()
     {
         ROOT_FOLDERS = null;
-        TRACK_METADATA = new Dictionary<string, TrackMetadata>();
+        TRACK_METADATA = new Dictionary<string, TrackMetadata>(StringComparer.OrdinalIgnoreCase);
         RootFolderPromptSuppressed = false;
         PlaylistHelper.EnsureRootFolderAsync = null;
         PlaylistIndexCache.Clear();

@@ -20,6 +20,30 @@ public sealed class LocalSettingsScenarioTests : IDisposable
     }
 
     [Fact]
+    public void Corrupt_settings_are_moved_aside_and_not_overwritten_by_the_next_save()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
+        const string truncated = "{\"SkipSeconds\":15,\"KeybindsJson\":\"{\\\"PlayP";
+        File.WriteAllText(_settingsPath, truncated);
+
+        Assert.Equal(LocalSettingsStore.DefaultSkipSeconds, LocalSettingsStore.GetSkipSeconds());
+        LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, true);
+
+        string quarantined = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(_settingsPath)!, "local_settings.json.corrupt-*"));
+        Assert.Equal(truncated, File.ReadAllText(quarantined));
+    }
+
+    [Fact]
+    public void Integer_too_large_for_int_does_not_reset_every_setting()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
+        File.WriteAllText(_settingsPath, "{\"SkipSeconds\":99999999999,\"DoubleClickOnNewTab\":true}");
+
+        Assert.True(LocalSettingsStore.GetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab));
+        Assert.Equal(int.MaxValue, LocalSettingsStore.GetSkipSeconds());
+    }
+
+    [Fact]
     public void Preference_flags_round_trip_through_disk()
     {
         LocalSettingsStore.SetBool(LocalSettingsStore.Keys.DoubleClickOnNewTab, true);

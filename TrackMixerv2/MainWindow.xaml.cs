@@ -42,16 +42,8 @@ namespace TrackMixerv2
             if (UiTestBootstrap.IsEnabled)
                 Title = "Track Mixer UI Test";
             AppPaths.EnsureDataDirectory();
-            string metadataPath = AppState.TrackMetadataJson;
-            string metadataDirectory = Path.GetDirectoryName(metadataPath);
-            if (!string.IsNullOrWhiteSpace(metadataDirectory) && !Directory.Exists(metadataDirectory))
-                Directory.CreateDirectory(metadataDirectory);
-            if (!File.Exists(metadataPath))
-                File.WriteAllText(metadataPath, "");
             CleanupTemporaryFiles();
-            AppState.TRACK_METADATA = JsonConvert.DeserializeObject<Dictionary<string, TrackMetadata>>(File.ReadAllText(AppState.TrackMetadataJson));
-            if (AppState.TRACK_METADATA == null)
-                AppState.TRACK_METADATA = new Dictionary<string, TrackMetadata>();
+            AppState.TRACK_METADATA = TrackMetadataStore.Load(AppState.TrackMetadataJson);
             PlaylistHelper.EnsureRootFolderAsync = () => Instance.AddNewRootFolder();
             launchFiles = files;
 
@@ -329,7 +321,15 @@ namespace TrackMixerv2
             if (LocalSettingsStore.ContainsKey(LocalSettingsStore.Keys.RecentVideosJson))
             {
                 string recentVideosJson = LocalSettingsStore.GetString(LocalSettingsStore.Keys.RecentVideosJson) ?? "[]";
-                var storedRecentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson) ?? new List<string>();
+                List<string> storedRecentVideos;
+                try
+                {
+                    storedRecentVideos = JsonConvert.DeserializeObject<List<string>>(recentVideosJson) ?? new List<string>();
+                }
+                catch (JsonException)
+                {
+                    storedRecentVideos = new List<string>();
+                }
                 recentVideos = Helper.FilterExistingPaths(storedRecentVideos);
                 if (recentVideos.Count != storedRecentVideos.Count)
                 {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -83,7 +84,7 @@ public static class LocalSettingsStore
         return value switch
         {
             int i => i,
-            long l => (int)l,
+            long l => (int)Math.Clamp(l, int.MinValue, int.MaxValue),
             string s when int.TryParse(s, out int parsed) => parsed,
             _ => defaultValue,
         };
@@ -190,25 +191,29 @@ public static class LocalSettingsStore
         return cache;
     }
 
+    /// <summary>
+    /// An unreadable file is moved aside instead of being overwritten by the next Set,
+    /// which would otherwise reset every preference and keybind to its default.
+    /// </summary>
     private static Dictionary<string, object> LoadFromDisk()
     {
+        var loaded = new Dictionary<string, object>(StringComparer.Ordinal);
+        string path = JsonPath;
+        if (!File.Exists(path))
+            return loaded;
+
         try
         {
-            string? directory = Path.GetDirectoryName(JsonPath);
-            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            string text = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(text))
+                return loaded;
 
-            if (!File.Exists(JsonPath))
-                return new Dictionary<string, object>();
-
-            JObject json = JObject.Parse(File.ReadAllText(JsonPath));
-            var loaded = new Dictionary<string, object>(StringComparer.Ordinal);
-            foreach (var property in json.Properties())
+            foreach (var property in JObject.Parse(text).Properties())
             {
                 loaded[property.Name] = property.Value.Type switch
                 {
                     JTokenType.Boolean => property.Value.Value<bool>(),
-                    JTokenType.Integer => property.Value.Value<int>(),
+                    JTokenType.Integer => property.Value.Value<long>(),
                     JTokenType.Float => property.Value.Value<double>(),
                     _ => property.Value.ToString(),
                 };
@@ -216,18 +221,20 @@ public static class LocalSettingsStore
 
             return loaded;
         }
-        catch
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or OverflowException)
         {
-            return new Dictionary<string, object>();
+            try
+            {
+                Trace.WriteLine($"Settings unreadable, moved to {AtomicFile.Quarantine(path)}: {ex.Message}");
+            }
+            catch (IOException)
+            {
+            }
+
+            return new Dictionary<string, object>(StringComparer.Ordinal);
         }
     }
 
-    private static void PersistLocked()
-    {
-        string? directory = Path.GetDirectoryName(JsonPath);
-        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-            Directory.CreateDirectory(directory);
-
-        File.WriteAllText(JsonPath, JsonConvert.SerializeObject(cache));
-    }
+    private static void PersistLocked() =>
+        AtomicFile.WriteAllText(JsonPath, JsonConvert.SerializeObject(cache));
 }
