@@ -20,7 +20,7 @@ public sealed class DeleteVideoScenarioTests : IDisposable
         _session.Launch();
 
         UiWait.UntilTrue(
-            () => _session.MixerPageIsLoaded() && _session.VideoTitleContains("latest.mp4"),
+            () => _session.MixerPageIsLoaded() && _session.VideoTitleContains("latest."),
             TimeSpan.FromSeconds(30),
             "mixer page to load latest clip");
     }
@@ -36,7 +36,7 @@ public sealed class DeleteVideoScenarioTests : IDisposable
         UiWait.UntilTrue(
             () => !File.Exists(_clips[2])
                 && File.Exists(_clips[1])
-                && _session.VideoTitleContains("middle.mp4")
+                && _session.VideoTitleContains("middle.")
                 && _session.MixerPageIsLoaded(),
             TimeSpan.FromSeconds(30),
             "navigation to middle clip after deleting latest");
@@ -48,7 +48,7 @@ public sealed class DeleteVideoScenarioTests : IDisposable
         UiWait.UntilTrue(
             () => !File.Exists(_clips[1])
                 && File.Exists(_clips[0])
-                && _session.VideoTitleContains("first.mp4")
+                && _session.VideoTitleContains("first.")
                 && _session.MixerPageIsLoaded(),
             TimeSpan.FromSeconds(30),
             "navigation to first clip after deleting middle");

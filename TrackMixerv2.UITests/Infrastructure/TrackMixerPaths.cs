@@ -2,10 +2,12 @@ namespace TrackMixerv2.UITests.Infrastructure;
 
 internal static class TrackMixerPaths
 {
-    public const string MultiTrackFixtureName = "uitest-clip.mp4";
+    // An OBS-style replay: 20 s, four audio tracks. See scripts/generate-uitest-fixture.ps1.
+    public const string MultiTrackFixtureName = "uitest-4track.mkv";
     public const string SingleTrackFixtureName = "uitest-clip-single.mp4";
 
-    public const int FixtureAudioTrackCount = 3;
+    public const int FixtureAudioTrackCount = 4;
+    public const double FixtureDurationSeconds = 20;
     public const int SingleTrackFixtureAudioTrackCount = 1;
 
     private static readonly string[] RelativeExePaths =
@@ -63,9 +65,9 @@ internal static class TrackMixerPaths
     public static (string ClipA, string ClipB, string Root) CreateTwoClipLibrary()
     {
         string root = CreateTempLibraryRoot();
-        string clipA = Path.Combine(root, "first-clip.mp4");
-        string clipB = Path.Combine(root, "second-clip.mp4");
         string fixture = ResolveFixtureClipPath();
+        string clipA = Path.Combine(root, "first-clip" + Path.GetExtension(fixture));
+        string clipB = Path.Combine(root, "second-clip" + Path.GetExtension(fixture));
         File.Copy(fixture, clipA, overwrite: true);
         File.Copy(fixture, clipB, overwrite: true);
         return (clipA, clipB, root);
@@ -85,7 +87,8 @@ internal static class TrackMixerPaths
 
         for (int i = 0; i < relativeNames.Count; i++)
         {
-            clips[i] = Path.Combine(root, relativeNames[i]);
+            // Media Foundation picks the demuxer by extension, so the copy keeps the fixture's.
+            clips[i] = Path.ChangeExtension(Path.Combine(root, relativeNames[i]), Path.GetExtension(fixture));
             File.Copy(fixture, clips[i], overwrite: true);
             File.SetCreationTime(clips[i], baseTime.AddMinutes(i));
         }
