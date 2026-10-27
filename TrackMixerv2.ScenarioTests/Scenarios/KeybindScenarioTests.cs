@@ -31,7 +31,7 @@ public sealed class KeybindScenarioTests : IDisposable
     [Fact]
     public void Custom_keybind_round_trips_through_local_settings()
     {
-        KeybindStore.Set(KeybindAction.Rewind, new KeybindChord(0x42, 2));
+        Assert.True(KeybindStore.TrySet(KeybindAction.Rewind, new KeybindChord(0x42, 2), out _));
         KeybindStore.ResetCache();
 
         Assert.Equal(0x42, KeybindStore.Get(KeybindAction.Rewind).Key);
@@ -45,10 +45,39 @@ public sealed class KeybindScenarioTests : IDisposable
         KeybindStore.ResetCache();
         KeybindChord original = KeybindStore.Get(KeybindAction.PlayPause);
 
-        KeybindStore.Set(KeybindAction.PlayPause, new KeybindChord(0x09));
+        Assert.False(KeybindStore.TrySet(KeybindAction.PlayPause, new KeybindChord(0x09), out string? error));
 
+        Assert.NotNull(error);
         Assert.Equal(original.Key, KeybindStore.Get(KeybindAction.PlayPause).Key);
         Assert.Equal(original.Modifiers, KeybindStore.Get(KeybindAction.PlayPause).Modifiers);
+    }
+
+    [Fact]
+    public void TrySet_rejects_a_chord_another_action_already_uses()
+    {
+        KeybindStore.ResetCache();
+
+        Assert.False(KeybindStore.TrySet(KeybindAction.Rewind, new KeybindChord(0x54, 2), out string? error));
+
+        Assert.Contains("New tab", error);
+        Assert.Equal(0x25, KeybindStore.Get(KeybindAction.Rewind).Key);
+        Assert.Equal(0x54, KeybindStore.Get(KeybindAction.NewTab).Key);
+    }
+
+    [Fact]
+    public void TrySet_treats_left_and_right_modifier_holds_as_the_same_chord()
+    {
+        KeybindStore.ResetCache();
+
+        Assert.False(KeybindStore.TrySet(KeybindAction.SpeedBoost, new KeybindChord(0xA3), out _));
+    }
+
+    [Fact]
+    public void TrySet_allows_rebinding_an_action_to_its_own_chord()
+    {
+        KeybindStore.ResetCache();
+
+        Assert.True(KeybindStore.TrySet(KeybindAction.PlayPause, new KeybindChord(0x20), out _));
     }
 
     [Fact]

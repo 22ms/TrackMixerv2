@@ -41,20 +41,21 @@ public static class KeybindApplicator
             }),
             true);
 
-        // Blanket focus guard: cancel every focus transition except to text-input
-        // controls (where the user needs to type) and ContentDialog descendants
-        // (where WinUI needs focus to drive dialog keyboard behaviour).
-        //
-        // This is the most reliable way to stop any control — slider, button,
-        // tab header, list item — from silently stealing keyboard focus on click,
-        // without having to set AllowFocusOnInteraction on every element.
+        // Blanket focus guard: no slider, button or tab header may take keyboard focus on
+        // click, or Space/arrows would go to it instead of the player. Text inputs, dialogs
+        // and flyout/menu content keep normal focus. Leaving a text input moves focus to an
+        // inert sink instead of being cancelled; cancelling trapped focus in the box forever
+        // and the box swallowed every playback key until restart.
         // See BACKLOG.md for the plan to replace this with a proper focus model.
         FocusManager.GettingFocus += (_, e) =>
         {
-            if (e.NewFocusedElement is TextBox or AutoSuggestBox or PasswordBox or NumberBox)
+            if (IsTextInput(e.NewFocusedElement) || ReferenceEquals(e.NewFocusedElement, window.FocusSink))
                 return;
 
-            if (IsInsideDialog(e.NewFocusedElement as DependencyObject))
+            if (IsInsideDialogOrPopup(e.NewFocusedElement as DependencyObject))
+                return;
+
+            if (IsTextInput(e.OldFocusedElement) && e.TrySetNewFocusedElement(window.FocusSink))
                 return;
 
             e.TryCancel();
@@ -63,11 +64,14 @@ public static class KeybindApplicator
         _mainWindowHooked = true;
     }
 
-    private static bool IsInsideDialog(DependencyObject? element)
+    private static bool IsTextInput(DependencyObject? element) =>
+        element is TextBox or AutoSuggestBox or PasswordBox or NumberBox;
+
+    private static bool IsInsideDialogOrPopup(DependencyObject? element)
     {
         while (element != null)
         {
-            if (element is ContentDialog)
+            if (element is ContentDialog or FlyoutPresenter or MenuFlyoutPresenter or Microsoft.UI.Xaml.Controls.Primitives.Popup)
                 return true;
             element = VisualTreeHelper.GetParent(element);
         }
@@ -110,8 +114,14 @@ public static class KeybindApplicator
 
     private static void HandleMainWindowKey(MainWindow window, KeyRoutedEventArgs args)
     {
-        if (window.ActiveMixerPage?.TryHandleKeybindRecordingKeyDown(args) == true)
+        if (!IsModifierKey(args.Key))
+            window.ActiveMixerPage?.NotifyNonModifierKeyDown();
+
+        if (!args.Handled && window.ActiveMixerPage?.TryHandleKeybindRecordingKeyDown(args) == true)
+        {
+            args.Handled = true;
             return;
+        }
 
         if (TryHandleEscapeExitFullscreen(window, args))
             return;
@@ -175,8 +185,12 @@ public static class KeybindApplicator
 
     private static void HandleMixerPageKey(MixerPage page, KeyRoutedEventArgs args)
     {
+        // Handled, so the window handler never runs the action that was just bound.
         if (page.TryHandleKeybindRecordingKeyDown(args))
+        {
+            args.Handled = true;
             return;
+        }
 
         if (!ShouldHandleKeybind(page.PageRootGrid, args))
             return;

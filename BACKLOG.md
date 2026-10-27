@@ -17,19 +17,21 @@ focus indicator in all cases, causing confusing UX:
 
 **Temporary mitigations applied:**
 
-1. `AllowFocusOnInteraction = False` on all transport `AppBarButton` /
-   `AppBarToggleButton` controls — clicking a button no longer steals focus.
-2. `DisableTabStops` also sets `AllowFocusOnInteraction = false` on every `Control`
-   in the visual tree when a tab or video loads.
-3. Tab key is intercepted at the `RootGrid` level in `KeybindApplicator` and marked
+1. A `FocusManager.GettingFocus` guard in `KeybindApplicator` cancels every focus move
+   except into text inputs, dialogs and flyout/menu content, so clicking a button or
+   slider never takes keyboard focus.
+2. Leaving a text input (e.g. the playlist NumberBox) moves focus to the inert
+   `MainWindow.FocusSink` instead of being cancelled, which used to trap focus in the box
+   and swallow every playback key until restart.
+3. `DisableTabStops` sets `IsTabStop = false` on every `Control` in the TabView tree.
+4. Tab key is intercepted at the `RootGrid` level in `KeybindApplicator` and marked
    handled, so focus never moves via Tab.
 
 **What needs to be done properly:**
 
 - Design a deliberate focus model: decide which controls should be reachable by
   keyboard, in what order, and how the focused state should be visually indicated.
-- Re-enable `AllowFocusOnInteraction = True` only for the controls that should
-  participate in keyboard navigation.
+- Let only the controls that should participate in keyboard navigation take focus.
 - Re-enable Tab navigation (remove the interceptor in `KeybindApplicator`) once
   focus visuals are implemented.
 - Consider replacing `DisableTabStops` with an explicit opt-in list of focusable

@@ -168,4 +168,62 @@ public sealed class KeybindHoldRulesScenarioTests
         Assert.Equal(0, repaired.Modifiers);
         Assert.Equal("Shift", KeybindFormatter.Format(repaired));
     }
+
+    private static readonly TimeSpan Delay = KeybindHoldRules.ModifierOnlyActivationDelay;
+
+    [Fact]
+    public void Modifier_only_hold_activates_after_the_delay()
+    {
+        var hold = new HoldChordTracker();
+
+        Assert.False(hold.Update(chordDown: true, isModifierOnly: true, TimeSpan.Zero));
+        Assert.False(hold.Update(true, true, Delay - TimeSpan.FromMilliseconds(1)));
+        Assert.True(hold.Update(true, true, Delay));
+        Assert.False(hold.Update(false, true, Delay * 2));
+    }
+
+    [Fact]
+    public void Ctrl_used_for_a_shortcut_never_triggers_the_ctrl_hold()
+    {
+        var hold = new HoldChordTracker();
+
+        hold.Update(true, true, TimeSpan.Zero);
+        hold.NotifyOtherKeyPressed();
+
+        Assert.False(hold.Update(true, true, Delay * 10));
+    }
+
+    [Fact]
+    public void Other_key_after_activation_ends_the_hold_until_release()
+    {
+        var hold = new HoldChordTracker();
+        hold.Update(true, true, TimeSpan.Zero);
+        Assert.True(hold.Update(true, true, Delay));
+
+        hold.NotifyOtherKeyPressed();
+        Assert.False(hold.Update(true, true, Delay * 2));
+
+        Assert.False(hold.Update(false, true, Delay * 3));
+        hold.Update(true, true, Delay * 4);
+        Assert.True(hold.Update(true, true, Delay * 5));
+    }
+
+    [Fact]
+    public void Other_key_while_released_does_not_poison_the_next_hold()
+    {
+        var hold = new HoldChordTracker();
+
+        hold.NotifyOtherKeyPressed();
+        hold.Update(true, true, TimeSpan.Zero);
+
+        Assert.True(hold.Update(true, true, Delay));
+    }
+
+    [Fact]
+    public void Key_plus_modifier_hold_activates_immediately()
+    {
+        var hold = new HoldChordTracker();
+
+        Assert.True(hold.Update(chordDown: true, isModifierOnly: false, TimeSpan.Zero));
+    }
 }

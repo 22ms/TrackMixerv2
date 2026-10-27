@@ -98,34 +98,37 @@ public static class KeybindStore
     return action.ToString();
   }
 
-  public static void Set(KeybindAction action, KeybindChord chord)
-  {
-    if (!TryValidateChord(action, chord, out _))
-      return;
-
-    lock (Lock)
-    {
-      GetOrLoadCacheLocked()[action] = chord;
-      PersistLocked();
-    }
-  }
-
-  public static bool TryValidateChord(KeybindAction action, KeybindChord chord, out string? error) =>
-      KeybindFocusRules.TryValidateChord(action, chord, out error);
-
   public static bool TrySet(KeybindAction action, KeybindChord chord, out string? error)
   {
-    if (!TryValidateChord(action, chord, out error))
+    if (!KeybindFocusRules.TryValidateChord(action, chord, out error))
       return false;
 
     lock (Lock)
     {
-      GetOrLoadCacheLocked()[action] = chord;
+      var bindings = GetOrLoadCacheLocked();
+      foreach (var (otherAction, otherChord) in bindings)
+      {
+        if (otherAction == action || !SameChord(otherChord, chord))
+          continue;
+
+        error = $"{KeybindFormatter.Format(chord)} is already used for \"{GetActionLabel(otherAction)}\". Change that shortcut first.";
+        return false;
+      }
+
+      bindings[action] = chord;
       PersistLocked();
     }
 
     error = null;
     return true;
+  }
+
+  private static bool SameChord(KeybindChord a, KeybindChord b)
+  {
+    if (KeybindHoldRules.IsModifierOnlyChord(a) && KeybindHoldRules.IsModifierOnlyChord(b))
+      return KeybindHoldRules.ModifierKeysMatch(a.Key, b.Key);
+
+    return a.Key == b.Key && a.Modifiers == b.Modifiers;
   }
 
   public static void ResetToDefaults()

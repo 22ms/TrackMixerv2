@@ -26,6 +26,8 @@ namespace TrackMixerv2
         TabViewItem tabViewItem;
         bool initialLoaded = false;
         private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _holdKeyTimer;
+        private readonly HoldChordTracker _boostHold = new();
+        private readonly HoldChordTracker _slowHold = new();
         private double? _appliedHoldRate;
         List<RangeBaseValueChangedEventHandler> VolumeSliderChangedHandlers = new List<RangeBaseValueChangedEventHandler>();
         List<RangeBaseValueChangedEventHandler> FlyoutVolumeSliderChangedHandlers = new List<RangeBaseValueChangedEventHandler>();
@@ -582,8 +584,9 @@ namespace TrackMixerv2
                 && !KeybindRecordingGate.IsRecording
                 && MainWindow.Instance?.ActiveMixerPage == this
                 && !IsTextEntryFocused();
-            bool boost = allowed && IsHoldChordActive(KeybindStore.Get(KeybindAction.SpeedBoost));
-            bool slow = allowed && IsHoldChordActive(KeybindStore.Get(KeybindAction.SpeedSlow));
+            TimeSpan now = TimeSpan.FromMilliseconds(Environment.TickCount64);
+            bool boost = UpdateHold(_boostHold, KeybindAction.SpeedBoost, allowed, now);
+            bool slow = UpdateHold(_slowHold, KeybindAction.SpeedSlow, allowed, now);
             double? rate = boost
                 ? LocalSettingsStore.GetSpeedBoostRate()
                 : slow ? LocalSettingsStore.GetSpeedSlowRate() : null;
@@ -597,13 +600,28 @@ namespace TrackMixerv2
                 player.EndTemporaryRate();
         }
 
+        private static bool UpdateHold(HoldChordTracker tracker, KeybindAction action, bool allowed, TimeSpan now)
+        {
+            KeybindChord chord = KeybindStore.Get(action);
+            return tracker.Update(allowed && IsHoldChordActive(chord), KeybindHoldRules.IsModifierOnlyChord(chord), now);
+        }
+
         private void ReleaseHoldKeys()
         {
+            _boostHold.Reset();
+            _slowHold.Reset();
             if (_appliedHoldRate == null)
                 return;
 
             _appliedHoldRate = null;
             MixedMediaPlayer?.EndTemporaryRate();
+        }
+
+        /// <summary>Called for every non-modifier key press so Ctrl+key chords cancel a Ctrl-only hold.</summary>
+        internal void NotifyNonModifierKeyDown()
+        {
+            _boostHold.NotifyOtherKeyPressed();
+            _slowHold.NotifyOtherKeyPressed();
         }
 
         private bool IsTextEntryFocused() =>

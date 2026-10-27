@@ -116,9 +116,6 @@ public static class KeybindFocusRules
     public static bool IsSliderNavigationKey(int virtualKey) =>
         virtualKey is 0x25 or 0x26 or 0x27 or 0x28 or 0x21 or 0x22 or 0x24 or 0x23;
 
-    public static bool IsButtonActivationKey(int virtualKey) =>
-        virtualKey is 0x20 or 0x0D;
-
     public static bool IsMenuNavigationKey(int virtualKey) =>
         virtualKey is 0x25 or 0x26 or 0x27 or 0x28 or 0x20 or 0x0D or 0x1B;
 

@@ -67,6 +67,13 @@ public static class KeybindHoldRules
         return getModifiers() == chord.Modifiers;
     }
 
+    /// <summary>
+    /// Holding Ctrl to press Ctrl+PageUp must not trigger a Ctrl-only hold (slow motion by
+    /// default). A modifier-only hold therefore waits <see cref="ModifierOnlyActivationDelay"/>
+    /// and is cancelled for the rest of the press once any other key goes down.
+    /// </summary>
+    public static readonly TimeSpan ModifierOnlyActivationDelay = TimeSpan.FromMilliseconds(200);
+
     private static bool IsEitherSideModifierDown(int normalizedKey, Func<int, bool> isKeyDown) =>
         normalizedKey switch
         {
@@ -75,4 +82,42 @@ public static class KeybindHoldRules
             0xA4 => isKeyDown(0xA4) || isKeyDown(0xA5) || isKeyDown(GenericMenu),
             _ => isKeyDown(normalizedKey),
         };
+}
+
+public sealed class HoldChordTracker
+{
+    private TimeSpan? _downSince;
+    private bool _interrupted;
+
+    public bool IsActive { get; private set; }
+
+    /// <summary>Feeds the current physical state; returns whether the hold is active.</summary>
+    public bool Update(bool chordDown, bool isModifierOnly, TimeSpan now)
+    {
+        if (!chordDown)
+        {
+            _downSince = null;
+            _interrupted = false;
+            return IsActive = false;
+        }
+
+        _downSince ??= now;
+        if (!isModifierOnly)
+            return IsActive = true;
+
+        return IsActive = !_interrupted && now - _downSince.Value >= KeybindHoldRules.ModifierOnlyActivationDelay;
+    }
+
+    public void NotifyOtherKeyPressed()
+    {
+        if (_downSince != null)
+            _interrupted = true;
+    }
+
+    public void Reset()
+    {
+        _downSince = null;
+        _interrupted = false;
+        IsActive = false;
+    }
 }

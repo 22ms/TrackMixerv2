@@ -14,6 +14,17 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="RootGrid" x:FieldModifier="public">
+        <!-- Where keyboard focus goes when it leaves a text box; see KeybindApplicator. -->
+        <ContentControl x:Name="FocusSink"
+                        x:FieldModifier="internal"
+                        IsTabStop="True"
+                        UseSystemFocusVisuals="False"
+                        Width="1"
+                        Height="1"
+                        Opacity="0"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top" />
         <TabView x:Name="TabView" Loaded="TabView_Loaded" x:FieldModifier="public" AutomationProperties.AutomationId="MainTabView">
 
         <TabView.Resources>
