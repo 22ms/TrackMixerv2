@@ -271,7 +271,7 @@
                                                 Value="Visible" />
                                     </VisualState.Setters>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="ProgressSlider"
+                                        <DoubleAnimation Storyboard.TargetName="TransportProgressSlider"
                                                          Storyboard.TargetProperty="Opacity"
                                                          To="0"
                                                          Duration="0" />
@@ -338,9 +338,9 @@
                                     <VisualState.Setters>
                                         <Setter Target="LeftSidePlayBorder.Visibility"
                                                 Value="Visible" />
-                                        <Setter Target="TimeElapsedElement.Visibility"
+                                        <Setter Target="TransportTimeElapsed.Visibility"
                                                 Value="Collapsed" />
-                                        <Setter Target="TimeRemainingElement.Visibility"
+                                        <Setter Target="TransportTimeRemaining.Visibility"
                                                 Value="Collapsed" />
                                         <Setter Target="MediaTransportControls_Timeline_Border.(Grid.Column)"
                                                 Value="1" />
@@ -356,31 +356,12 @@
                                                 Value="48" />
                                         <Setter Target="TransportCommandsRoot.Margin"
                                                 Value="0" />
-                                        <Setter Target="PlayPauseButton.Visibility"
+                                        <Setter Target="TransportPlayPauseButton.Visibility"
                                                 Value="Collapsed" />
-                                        <Setter Target="ProgressSlider.Margin"
+                                        <Setter Target="TransportProgressSlider.Margin"
                                                 Value="{ThemeResource MediaTransportControlsProgressSliderCompactMargin}" />
                                         <Setter Target="ControlPanel_ControlPanelVisibilityStates_Border.Padding"
                                                 Value="3" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                            </VisualStateGroup>
-                            <!-- PlayPause states -->
-                            <VisualStateGroup x:Name="PlayPauseStates">
-                                <VisualState x:Name="PlayState">
-                                    <VisualState.Setters>
-                                        <Setter Target="PlayPauseButton.(AutomationProperties.Name)" Value="Play" />
-                                        <Setter Target="PlayPauseButtonOnLeft.(AutomationProperties.Name)" Value="Play" />
-                                    </VisualState.Setters>
-                                </VisualState>
-                                <VisualState x:Name="PauseState">
-                                    <VisualState.Setters>
-                                        <Setter Target="PlayPauseSymbolLeft.Glyph"
-                                                Value="&#xF8AE;" />
-                                        <Setter Target="PlayPauseSymbol.Glyph"
-                                                Value="&#xF8AE;" />
-                                        <Setter Target="PlayPauseButton.(AutomationProperties.Name)" Value="Pause" />
-                                        <Setter Target="PlayPauseButtonOnLeft.(AutomationProperties.Name)" Value="Pause" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
@@ -470,7 +451,8 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="64" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="TimeElapsedElement"
+                                        <TextBlock x:Name="TransportTimeElapsed"
+                                                   AutomationProperties.AutomationId="TimeElapsed"
                                                    Grid.Column="0"
                                                    Style="{StaticResource CaptionTextBlockStyle}"
                                                    FontFamily="Consolas"
@@ -480,7 +462,9 @@
                                                    VerticalAlignment="Center" />
                                         <Grid Grid.Column="1"
                                               VerticalAlignment="Center">
-                                            <Slider x:Name="ProgressSlider"
+                                            <Slider x:Name="TransportProgressSlider"
+                                                    AutomationProperties.AutomationId="ProgressSlider"
+                                                    AutomationProperties.Name="Seek"
                                                     MinWidth="80"
                                                     Height="{ThemeResource MediaTransportControlsSliderHeight}"
                                                     VerticalAlignment="Center"
@@ -495,7 +479,8 @@
                                                          Margin="0,2,0,0"
                                                          Visibility="Collapsed" />
                                         </Grid>
-                                        <TextBlock x:Name="TimeRemainingElement"
+                                        <TextBlock x:Name="TransportTimeRemaining"
+                                                   AutomationProperties.AutomationId="TimeRemaining"
                                                    Grid.Column="2"
                                                    Style="{StaticResource CaptionTextBlockStyle}"
                                                    FontFamily="Consolas"
@@ -509,7 +494,7 @@
                                         Grid.Column="0"
                                         Grid.Row="1"
                                         Visibility="Collapsed">
-                                    <AppBarButton x:Name="PlayPauseButtonOnLeft"
+                                    <AppBarButton x:Name="TransportPlayPauseButtonOnLeft"
                                                   Margin="0"
                                                   VerticalAlignment="Center"
                                                   Style="{StaticResource AppBarButtonStyle}">
@@ -518,7 +503,7 @@
                                             <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
                                         </AppBarButton.Resources>
                                         <AppBarButton.Icon>
-                                            <FontIcon x:Name="PlayPauseSymbolLeft"
+                                            <FontIcon x:Name="TransportPlayPauseSymbolLeft"
                                                       Glyph="&#xF5B0;" />
                                         </AppBarButton.Icon>
                                     </AppBarButton>
@@ -570,7 +555,7 @@
                                                 </AppBarButton.Icon>
                                             </AppBarButton>
                                         </StackPanel>
-                                        <AppBarButton x:Name="PlayPauseButton"
+                                        <AppBarButton x:Name="TransportPlayPauseButton"
                                                       Grid.Column="1"
                                                       Style="{StaticResource AppBarButtonStyle}"
                                                       MediaTransportControlsHelper.DropoutOrder="23"
@@ -582,7 +567,7 @@
                                                 <Thickness x:Key="AppBarButtonContentViewboxCollapsedMargin">0,12</Thickness>
                                             </AppBarButton.Resources>
                                             <AppBarButton.Icon>
-                                                <FontIcon x:Name="PlayPauseSymbol"
+                                                <FontIcon x:Name="TransportPlayPauseSymbol"
                                                           Glyph="&#xF5B0;" />
                                             </AppBarButton.Icon>
                                         </AppBarButton>
@@ -777,18 +762,8 @@
                                                 <SymbolIcon x:Name="RepeatSymbol"
                                                             Symbol="RepeatAll" />
                                             </AppBarToggleButton>
-                                            <AppBarButton x:Name="VolumeMuteButton"
-                                                          Style="{StaticResource AppBarButtonStyle}"
-                                                          Visibility="Collapsed">
-                                                <SymbolIcon x:Name="VolumeMuteSymbol"
-                                                            Symbol="Volume" />
-                                            </AppBarButton>
                                         </CommandBar.PrimaryCommands>
                                     </CommandBar>
-                                    <Slider x:Name="VolumeSlider"
-                                            Visibility="Collapsed"
-                                            IsTabStop="False"
-                                            Value="50" />
                                     </Grid>
                                 </Border>
                             </Grid>

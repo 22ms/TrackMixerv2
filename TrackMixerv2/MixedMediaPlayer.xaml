@@ -18,8 +18,11 @@
     </Page.Resources>
 
     <Grid>
-        <MediaPlayerElement x:Name="MainMediaPlayer" x:FieldModifier="public" AllowDrop="True" PointerPressed="MainMediaPlayer_PointerPressed" PointerReleased="MainMediaPlayer_PointerReleased"
-        AutoPlay="True"
+        <MediaPlayerElement x:Name="MainMediaPlayer" AllowDrop="True"
+        PointerPressed="MainMediaPlayer_PointerPressed"
+        PointerReleased="MainMediaPlayer_PointerReleased"
+        PointerCanceled="MainMediaPlayer_PointerReleased"
+        PointerCaptureLost="MainMediaPlayer_PointerReleased"
         AreTransportControlsEnabled="True"
         Stretch="Uniform" CanDrag="True">
             <MediaPlayerElement.TransportControls>
@@ -36,5 +39,14 @@
                 </local:MixedMediaPlayerControl>
             </MediaPlayerElement.TransportControls>
         </MediaPlayerElement>
+        <TextBlock x:Name="PlaybackDiagnostics"
+                   AutomationProperties.AutomationId="PlaybackDiagnostics"
+                   Visibility="Collapsed"
+                   Opacity="0"
+                   IsHitTestVisible="False"
+                   Width="1"
+                   Height="1"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top" />
     </Grid>
 </Page>

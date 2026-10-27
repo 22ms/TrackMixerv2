@@ -1,5 +1,6 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
@@ -9,11 +10,22 @@ using Windows.Foundation;
 
 namespace TrackMixerv2
 {
+    /// <summary>
+    /// The players run on a MediaTimelineController, where MediaPlayer.Play/Pause/Position
+    /// throw. So the template parts the stock transport controls would wire to the
+    /// MediaPlayer (play/pause, progress, time labels) carry Transport* names and
+    /// MixedMediaPlayer drives them.
+    /// </summary>
     public sealed class MixedMediaPlayerControl : MediaTransportControls
     {
         private const double SliderThumbWidth = 24;
+        private const string PlayGlyph = "\uF5B0";
+        private const string PauseGlyph = "\uF8AE";
 
         public Slider ProgressSlider;
+        public AppBarButton PlayPauseButton, PlayPauseButtonOnLeft;
+        public TextBlock TimeElapsed, TimeRemaining;
+        private FontIcon _playPauseSymbol, _playPauseSymbolLeft;
         public Button NextTrackButton, PreviousTrackButton;
         public StackPanel TrackVolumeFlyoutContent;
         public StackPanel FullscreenMixerToolsHost;
@@ -43,7 +55,13 @@ namespace TrackMixerv2
         {
             base.OnApplyTemplate();
 
-            ProgressSlider = GetTemplateChild("ProgressSlider") as Slider;
+            ProgressSlider = GetTemplateChild("TransportProgressSlider") as Slider;
+            PlayPauseButton = GetTemplateChild("TransportPlayPauseButton") as AppBarButton;
+            PlayPauseButtonOnLeft = GetTemplateChild("TransportPlayPauseButtonOnLeft") as AppBarButton;
+            _playPauseSymbol = GetTemplateChild("TransportPlayPauseSymbol") as FontIcon;
+            _playPauseSymbolLeft = GetTemplateChild("TransportPlayPauseSymbolLeft") as FontIcon;
+            TimeElapsed = GetTemplateChild("TransportTimeElapsed") as TextBlock;
+            TimeRemaining = GetTemplateChild("TransportTimeRemaining") as TextBlock;
             NextTrackButton = GetTemplateChild("NextTrackButton") as Button;
             PreviousTrackButton = GetTemplateChild("PreviousTrackButton") as Button;
             TrackVolumeFlyoutContent = GetTemplateChild("TrackVolumeFlyoutContent") as StackPanel;
@@ -66,6 +84,37 @@ namespace TrackMixerv2
                 _playbackRateTickLabelsCanvas.SizeChanged += (_, __) => LayoutPlaybackRateTickLabels();
 
             EnsureCustomPlaybackRateFlyout();
+        }
+
+        public void SetPlaying(bool playing)
+        {
+            string glyph = playing ? PauseGlyph : PlayGlyph;
+            string name = playing ? "Pause" : "Play";
+            if (_playPauseSymbol != null)
+                _playPauseSymbol.Glyph = glyph;
+            if (_playPauseSymbolLeft != null)
+                _playPauseSymbolLeft.Glyph = glyph;
+            if (PlayPauseButton != null)
+                AutomationProperties.SetName(PlayPauseButton, name);
+            if (PlayPauseButtonOnLeft != null)
+                AutomationProperties.SetName(PlayPauseButtonOnLeft, name);
+        }
+
+        public void SetTimes(TimeSpan position, TimeSpan duration)
+        {
+            if (TimeElapsed != null)
+                TimeElapsed.Text = FormatTime(position);
+            if (TimeRemaining != null)
+                TimeRemaining.Text = FormatTime(duration - position);
+        }
+
+        private static string FormatTime(TimeSpan time)
+        {
+            if (time < TimeSpan.Zero)
+                time = TimeSpan.Zero;
+            return time.TotalHours >= 1
+                ? time.ToString(@"h\:mm\:ss")
+                : time.ToString(@"mm\:ss");
         }
 
         public void EnsureCustomPlaybackRateFlyout()

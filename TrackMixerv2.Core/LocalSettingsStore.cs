@@ -12,7 +12,6 @@ public static class LocalSettingsStore
         public const string SuppressRootFolderPrompt = "SuppressRootFolderPrompt";
         public const string DoubleClickOnNewTab = "DoubleClickOnNewTab";
         public const string DragAndDropOnNewTab = "DragAndDropOnNewTab";
-        public const string RecentVideo = "RecentVideo";
         public const string SkipSeconds = "SkipSeconds";
         // Legacy global multiplier; kept as the default for the per-slider keys below.
         public const string SliderWheelSpeed = "SliderWheelSpeed";

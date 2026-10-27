@@ -54,11 +54,11 @@ namespace TrackMixerv2
             this.Closed += MainWindow_Closed;
 
             CustomDragRegion.Loaded += TitleBarDragRegion_Loaded;
-            CustomDragRegion.LayoutUpdated += TitleBarDragRegion_LayoutUpdated;
+            CustomDragRegion.SizeChanged += TitleBarDragRegion_SizeChanged;
             EmptyStateDragRegion.Loaded += TitleBarDragRegion_Loaded;
-            EmptyStateDragRegion.LayoutUpdated += TitleBarDragRegion_LayoutUpdated;
+            EmptyStateDragRegion.SizeChanged += TitleBarDragRegion_SizeChanged;
             SizeChanged += MainWindow_SizeChanged;
-            TabView.LayoutUpdated += TabView_LayoutUpdated;
+            TabView.SelectionChanged += TabView_SelectionChanged;
             TabView.AddTabButtonClick += TabView_AddTabButtonClick;
             TabView.TabItemsChanged += TabView_TabItemsChanged;
             TabView.TabCloseRequested += TabView_TabCloseRequested;
@@ -148,11 +148,11 @@ namespace TrackMixerv2
         {
             ExitPlayerFullScreen();
             CustomDragRegion.Loaded -= TitleBarDragRegion_Loaded;
-            CustomDragRegion.LayoutUpdated -= TitleBarDragRegion_LayoutUpdated;
+            CustomDragRegion.SizeChanged -= TitleBarDragRegion_SizeChanged;
             EmptyStateDragRegion.Loaded -= TitleBarDragRegion_Loaded;
-            EmptyStateDragRegion.LayoutUpdated -= TitleBarDragRegion_LayoutUpdated;
+            EmptyStateDragRegion.SizeChanged -= TitleBarDragRegion_SizeChanged;
             SizeChanged -= MainWindow_SizeChanged;
-            TabView.LayoutUpdated -= TabView_LayoutUpdated;
+            TabView.SelectionChanged -= TabView_SelectionChanged;
             TabView.AddTabButtonClick -= TabView_AddTabButtonClick;
             TabView.TabCloseRequested -= TabView_TabCloseRequested;
         }
@@ -224,17 +224,29 @@ namespace TrackMixerv2
                 ExitPlayerFullScreen();
         }
 
-        private void TabView_LayoutUpdated(object sender, object e)
+        private void TabView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            UpdateTitle();
             ApplyTitleBar();
-            if (TabView.SelectedItem == null) return;
-            Title = (TabView.SelectedItem as TabViewItem).Header.ToString();
+        }
+
+        /// <summary>A tab switched to another clip: refresh the window title and the restore list.</summary>
+        internal void OnMediaChanged()
+        {
+            UpdateTitle();
+            SaveRecentVideos();
+        }
+
+        private void UpdateTitle()
+        {
+            if (TabView.SelectedItem is TabViewItem { Header: object header })
+                Title = header.ToString();
         }
 
         private void TitleBarDragRegion_Loaded(object sender, RoutedEventArgs e) =>
             ApplyTitleBar();
 
-        private void TitleBarDragRegion_LayoutUpdated(object sender, object e) =>
+        private void TitleBarDragRegion_SizeChanged(object sender, SizeChangedEventArgs e) =>
             ApplyTitleBar();
 
         private async void MainWindow_SizeChanged(object sender, WindowSizeChangedEventArgs args)
@@ -494,6 +506,18 @@ namespace TrackMixerv2
 
         public async void AddNewTabs(string[] files, bool onNewTab = true)
         {
+            try
+            {
+                await AddNewTabsAsync(files, onNewTab);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Opening tabs failed: {ex}");
+            }
+        }
+
+        private async Task AddNewTabsAsync(string[] files, bool onNewTab)
+        {
             if (files == null || files.Length == 0) return;
 
             files = Helper.FilterExistingPaths(files).ToArray();
@@ -516,13 +540,9 @@ namespace TrackMixerv2
                 if (AppState.RootFoldersContainFile(firstFile) == null && !RootFolderPromptSuppressed)
                     await AddNewRootFolder();
 
-                var currentTab = TabView.SelectedItem as TabViewItem;
-                if (currentTab != null)
+                if (TabView.SelectedItem is TabViewItem { Content: MixerPage currentPage })
                 {
-                    currentTab.Header = Helper.GetTitleFromPath(firstFile);
-                    currentTab.IconSource = new SymbolIconSource() { Symbol = Symbol.SlideShow };
-
-                    ((MixerPage)currentTab.Content).OpenNewMedia(firstFile);
+                    currentPage.OpenNewMedia(firstFile);
                 }
                 else
                 {
@@ -568,13 +588,23 @@ namespace TrackMixerv2
             e.Handled = true;
         }
 
-        private void MixedMediaPlayer_Drop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+        // The DataView is only valid while the drop is in progress, hence the deferral.
+        private async void MixedMediaPlayer_Drop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
         {
-            dispatcherQueue.TryEnqueue(async () =>
+            e.Handled = true;
+            var deferral = e.GetDeferral();
+            try
             {
                 await HandleVideoFilesDropAsync(e.DataView);
-                e.Handled = true;
-            });
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Drop failed: {ex}");
+            }
+            finally
+            {
+                deferral.Complete();
+            }
         }
 
         private void EmptyState_DragOver(object sender, DragEventArgs e)
@@ -593,11 +623,7 @@ namespace TrackMixerv2
         private void EmptyState_Drop(object sender, DragEventArgs e)
         {
             SetEmptyStateDropHighlight(false);
-            dispatcherQueue.TryEnqueue(async () =>
-            {
-                await HandleVideoFilesDropAsync(e.DataView);
-                e.Handled = true;
-            });
+            MixedMediaPlayer_Drop(sender, e);
         }
 
         private async Task HandleVideoFilesDropAsync(DataPackageView dataView)
@@ -631,8 +657,7 @@ namespace TrackMixerv2
             {
                 case "openFile":
                     {
-                        MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
-                        if (page == null) return;
+                        if (ActiveMixerPage is not MixerPage page) return;
                         var wasPlaying = page.PauseMediaIfPlaying();
                         IReadOnlyList<StorageFile> files = await OpenFilesDialog();
                         if (files.Count <= 0)
@@ -646,8 +671,7 @@ namespace TrackMixerv2
                     }
                 case "manageRootFolders":
                     {
-                        MixerPage page = (TabView.SelectedItem as TabViewItem).Content as MixerPage;
-                        if (page == null) return;
+                        if (ActiveMixerPage is not MixerPage page) return;
                         await page.ShowRootFolderManagerAsync();
                         break;
                     }

@@ -1,7 +1,9 @@
+#nullable enable
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
@@ -9,6 +11,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
@@ -21,236 +24,133 @@ using static TrackMixerv2.PlaylistHelper;
 
 namespace TrackMixerv2
 {
+    /// <summary>
+    /// Plays a video with all of its audio tracks at once. Track 0 plays in the video's own
+    /// player; each further track gets an audio-only player (AudioTrackSource never decodes
+    /// video). All players run on one MediaTimelineController, so they share a single clock
+    /// and never need re-seeking to stay in sync. Under a timeline controller
+    /// MediaPlayer.Play/Pause/Position throw, so this class drives the transport itself.
+    /// </summary>
     public sealed partial class MixedMediaPlayer : Page
     {
-        public class MediaLoadedEventArgs : EventArgs
+        public sealed class MediaLoadedEventArgs(string path, IReadOnlyList<string> trackNames) : EventArgs
         {
-            public List<MediaPlayer> TrackPlayers { get; set; }
-            public string path;
-            public MediaLoadedEventArgs(List<MediaPlayer> trackPlayers, string path)
-            {
-                TrackPlayers = trackPlayers;
-                this.path = path;
-            }
+            public string Path { get; } = path;
+            public IReadOnlyList<string> TrackNames { get; } = trackNames;
         }
 
-        private List<MediaPlayer> TrackPlayers = new List<MediaPlayer>();
-        private List<bool> MediaOpened = new List<bool>();
-        private Dictionary<MediaPlayer, TypedEventHandler<MediaPlayer, object>> TrackOpenedHandlers = new Dictionary<MediaPlayer, TypedEventHandler<MediaPlayer, object>>();
+        private sealed record TrackPlayer(MediaPlayer Player, AudioTrackSource? AudioOnlySource);
 
-        private TypedEventHandler<MediaPlayer, object> MediaOpenedHandler;
-        private TypedEventHandler<MediaPlayer, MediaPlayerFailedEventArgs> MediaFailedHandler;
-        private DispatcherQueue dispatcherQueue;
+        private static readonly TimeSpan OpenTimeout = TimeSpan.FromSeconds(15);
+        private const long ScrubSeekIntervalMs = 150;
+        private const double RightClickHoldRate = 2.0;
+
+        private readonly DispatcherQueue dispatcherQueue;
+        private readonly DispatcherQueueTimer _progressTimer;
         public AutoplayMode AutoplayMode = AutoplayMode.Off;
-        public event EventHandler<MediaLoadedEventArgs> MediaLoaded;
-        public event EventHandler FullScreenToggleRequested;
-        public PlaylistConfig PlaylistConfig;
+        public PlaylistConfig PlaylistConfig { get; } = new();
 
-        private string currentVideo;
-        private string preChangeVideo;
-        private int _openMediaGeneration;
-        private DispatcherQueueTimer? _syncTimer;
-        private bool _isDisposing;
+        /// <summary>Raised when a file starts opening, before anything is loaded.</summary>
+        public event EventHandler<string>? MediaOpening;
+
+        /// <summary>
+        /// Raised once every track is open and before playback starts, so handlers can apply
+        /// saved volumes before anything is audible.
+        /// </summary>
+        public event EventHandler<MediaLoadedEventArgs>? MediaLoaded;
+
+        public event EventHandler? PlaybackStateChanged;
+        public event EventHandler? FullScreenToggleRequested;
+
+        private string? currentVideo;
+        private int _openGeneration;
+        private MediaTimelineController? _timeline;
+        private MediaPlayer? _mainPlayer;
+        private TrackPlayer?[] _trackPlayers = [];
+        private TimeSpan _duration;
+        private TimeSpan? _seekTarget;
+        private long _seekTick;
+        private double _baseRate = 1.0;
+        private double? _temporaryRate;
+        private bool _rightHoldActive;
+        private bool _scrubbing;
+        private bool _resumeAfterScrub;
+        private bool _updatingProgress;
+        private long _lastScrubSeekTick;
+        private bool _controlEventsHooked;
 
         public MixedMediaPlayer()
         {
-            this.InitializeComponent();
+            InitializeComponent();
             dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-            PlaylistConfig = new PlaylistConfig();
-            Loaded += MixedMediaPlayer_Loaded;
+            _progressTimer = dispatcherQueue.CreateTimer();
+            _progressTimer.Interval = TimeSpan.FromMilliseconds(200);
+            _progressTimer.Tick += (_, _) => UpdateTransport();
+            PlaylistConfig.PropertyChanged += PlaylistConfig_PropertyChanged;
+            MainMediaPlayer.DragStarting += MainMediaPlayer_DragStarting;
+            customMixedMediaPlayerControl.Loaded += (_, _) => HookControlEvents();
+            if (UiTestBootstrap.IsEnabled)
+                PlaybackDiagnostics.Visibility = Visibility.Visible;
         }
 
-        private void MediaPlayer_CurrentStateChanged(MediaPlayer sender, object args)
+        public string? CurrentVideo => currentVideo;
+
+        public bool IsPlaying => _timeline?.State == MediaTimelineControllerState.Running;
+
+        public double PlaybackRate => _temporaryRate ?? _baseRate;
+
+        public TimeSpan Position
         {
-            if (_isDisposing)
-                return;
-
-            // This event fires on a background thread. XAML elements (MainMediaPlayer is a
-            // MediaPlayerElement) and DispatcherQueueTimer must only be touched on the UI
-            // thread, or they throw COMException (E_WRONG_THREAD) which is silently swallowed.
-            // Capture the state here (MediaPlayer itself is thread-safe) and dispatch all work.
-            MediaPlayerState state;
-            try { state = sender.CurrentState; }
-            catch (COMException) { return; }
-
-            dispatcherQueue.TryEnqueue(() =>
+            get
             {
-                if (_isDisposing)
-                    return;
+                if (_timeline == null)
+                    return TimeSpan.Zero;
 
-                if (state == MediaPlayerState.Playing)
+                TimeSpan position = _timeline.Position;
+                // The controller reports a new Position only about a millisecond after it is
+                // set, so two quick skips would both start from the old position.
+                if (_seekTarget is TimeSpan target)
                 {
-                    SyncTrackPlayersToMain(force: true);
-                    StartAuxiliaryTracks();
-                    StartSyncTimer();
+                    if (Math.Abs((position - target).TotalMilliseconds) < 250 || Environment.TickCount64 - _seekTick > 1000)
+                        _seekTarget = null;
+                    else
+                        position = target;
                 }
-                else
-                {
-                    StopSyncTimer();
-                    PauseAuxiliaryTracks();
-                }
-            });
+
+                if (position < TimeSpan.Zero)
+                    return TimeSpan.Zero;
+                return _duration > TimeSpan.Zero && position > _duration ? _duration : position;
+            }
         }
 
-        private void MediaPlayer_MediaPlayerRateChanged(MediaPlayer sender, MediaPlayerRateChangedEventArgs args)
+        public async void OpenMedia(string filePath)
         {
-            double rate = sender.PlaybackRate;
-            ForEachAuxiliaryTrack(trackPlayer => trackPlayer.PlaybackRate = rate);
-
-            dispatcherQueue.TryEnqueue(() =>
-                customMixedMediaPlayerControl?.SetPlaybackRateSelection(rate));
-        }
-
-        private void MixedMediaPlayer_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-        {
-            RegisterPlayerEvents();
-        }
-
-        private void PlaylistConfig_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            if (currentVideo != null)
-                PrewarmPlaylistIndex(PlaylistConfig, currentVideo);
-
-            if (PlaylistConfig.PlaylistMode == PlaylistMode.Chrono)
-                return;
-            string newVideo = IsInRatings(PlaylistConfig, currentVideo);
-            if (newVideo == null) return;
-            preChangeVideo = currentVideo;
-            dispatcherQueue.TryEnqueue(() =>
-            {
-                Dispose();
-                OpenMediaAsync(newVideo);
-            });
-        }
-
-        private async void MainMediaPlayer_DragStarting(Microsoft.UI.Xaml.UIElement sender, Microsoft.UI.Xaml.DragStartingEventArgs args)
-        {
-            var deferall = args.GetDeferral();
-            StorageFile currentFile = await StorageFile.GetFileFromPathAsync(currentVideo);
-
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-
+            int generation = ++_openGeneration;
             try
             {
-                StorageItemThumbnail thumbnail = await currentFile.GetThumbnailAsync(ThumbnailMode.VideosView);
-                BitmapImage bitmapImage = new BitmapImage();
-                await bitmapImage.SetSourceAsync(thumbnail);
-
-                args.DragUI.SetContentFromBitmapImage(bitmapImage);
-                args.Data.RequestedOperation = DataPackageOperation.Copy;
-                args.AllowedOperations = DataPackageOperation.Copy;
-
-                stopwatch.Stop();
-                TimeSpan elapsed = stopwatch.Elapsed;
-                Debug.WriteLine($"Thumbnail loading time: {elapsed.TotalMilliseconds} ms");
-
-                args.Data.SetStorageItems(new[] { currentFile }, false);
-                PauseAll();
+                await OpenMediaCoreAsync(filePath, generation);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error retrieving thumbnail: {ex.Message}");
-            }
-            finally
-            {
-                deferall.Complete();
+                Trace.WriteLine($"Opening '{filePath}' failed: {ex}");
             }
         }
 
-        private void CustomMixedMediaPlayerControl_Loaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        private async Task OpenMediaCoreAsync(string filePath, int generation)
         {
-            RegisterControlEvents();
-        }
+            CloseMedia();
+            currentVideo = filePath;
+            MediaOpening?.Invoke(this, filePath);
 
-        private void AutoplayOption_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-        {
-            if (sender is not RadioMenuFlyoutItem item || item.Tag is not string option)
-                return;
-
-            switch (option)
-            {
-                case "forward":
-                    customMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = "\uEA47";
-                    AutoplayMode = AutoplayMode.Forward;
-                    break;
-                case "backward":
-                    customMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = "\uE830";
-                    AutoplayMode = AutoplayMode.Backward;
-                    break;
-                case "off":
-                    customMixedMediaPlayerControl.AutoplaySmallIcon.Glyph = "\uE8BB";
-                    AutoplayMode = AutoplayMode.Off;
-                    break;
-            }
-        }
-
-        private void PreviousTrackButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-        {
-            if (currentVideo == null) return;
-            PlayPreviousTrack();
-        }
-
-        private void NextTrackButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-        {
-            if (currentVideo == null) return;
-            PlayNextTrack();
-        }
-
-        public void ChangePlaybackSpeed(double rate)
-        {
-            if (currentVideo == null) return;
-            MainMediaPlayer.MediaPlayer.PlaybackRate = rate;
-            ForEachAuxiliaryTrack(trackPlayer => trackPlayer.PlaybackRate = rate);
-
-            customMixedMediaPlayerControl?.SetPlaybackRateSelection(rate);
-        }
-
-        private async Task ShowUnsupportedCodecDialogAsync(int mediaGeneration)
-        {
-            if (UiTestBootstrap.IsEnabled)
-                return;
-
-            if (!MediaDialogRules.ShouldShowForOpenGeneration(mediaGeneration, _openMediaGeneration, _isDisposing))
-                return;
-
-            if (!MediaDialogRules.ShouldShowCodecFailureDialog(currentVideo, File.Exists(currentVideo)))
-                return;
-
-            ContentDialog unsupportedCodecDialog = new ContentDialog()
-            {
-                XamlRoot = this.XamlRoot,
-                Title = "Audio/video codec might be unsupported. Audio/video might not play.",
-                Content = "Download the appropiate Audio/video Extension (e.g. AV1, HEVC, VP9, Web Media Extensions) from the Microsoft Store or check the Discord for support.",
-                CloseButtonText = "Dismiss"
-            };
-
-            await ContentDialogPresenter.ShowAsync(unsupportedCodecDialog);
-        }
-
-        private void RequestUnsupportedCodecDialog(int mediaGeneration)
-        {
-            if (UiTestBootstrap.IsEnabled)
-                return;
-
-            dispatcherQueue.TryEnqueue(() => _ = ShowUnsupportedCodecDialogAsync(mediaGeneration));
-        }
-
-        public async void OpenMediaAsync(string filePath)
-        {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
-                await TryAdvancePastUnavailableMediaAsync(filePath);
+                await AdvancePastUnavailableAsync(filePath, generation);
                 return;
             }
 
-            int generation = ++_openMediaGeneration;
-            Dispose();
-            _isDisposing = false;
-            currentVideo = filePath;
             PlaylistIndexCache.NotifyMediaOpened(filePath, PlaylistConfig.SubfolderOnly);
             PrewarmPlaylistIndex(PlaylistConfig, filePath);
-            LocalSettingsStore.SetString(LocalSettingsStore.Keys.RecentVideo, currentVideo);
+
             StorageFile file;
             try
             {
@@ -258,129 +158,337 @@ namespace TrackMixerv2
             }
             catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
             {
-                Trace.WriteLine($"OpenMediaAsync failed for '{filePath}': {ex.Message}");
-                await TryAdvancePastUnavailableMediaAsync(filePath);
+                Trace.WriteLine($"Opening '{filePath}' failed: {ex.Message}");
+                if (generation == _openGeneration)
+                    await AdvancePastUnavailableAsync(filePath, generation);
                 return;
             }
-            MediaSource source = MediaSource.CreateFromStorageFile(file);
-            MediaPlaybackItem mainPlaybackItem = new MediaPlaybackItem(source);
-            MainMediaPlayer.MediaPlayer.Source = mainPlaybackItem;
-            MediaOpenedHandler = new TypedEventHandler<MediaPlayer, object>(async (mainPlayer, e) =>
+
+            if (generation != _openGeneration)
+                return;
+
+            var mainPlayer = CreatePlayer();
+            var trackPlayers = new List<TrackPlayer?>();
+            bool owned = false;
+            try
             {
-                if (generation != _openMediaGeneration)
+                var mainItem = new MediaPlaybackItem(MediaSource.CreateFromStorageFile(file));
+                bool opened = await OpenAsync(mainPlayer, mainItem);
+                if (generation != _openGeneration)
                     return;
 
-                MediaPlaybackItem loadedMedia = mainPlayer.Source as MediaPlaybackItem;
-                if (loadedMedia == null) return;
-
-                bool isVideoUnsupported = loadedMedia.VideoTracks?.Count > 0 &&
-                    loadedMedia.VideoTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported;
-
-                bool isAudioUnsupported = loadedMedia.AudioTracks?.Count > 0 &&
-                    loadedMedia.AudioTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported;
-
-                if (isVideoUnsupported || isAudioUnsupported)
+                if (!opened || IsUnsupported(mainItem))
                     RequestUnsupportedCodecDialog(generation);
-
-                if (loadedMedia.AudioTracks.Count > 0)
-                {
-                    loadedMedia.AudioTracks.SelectedIndex = 0;
-                }
-
-                if (loadedMedia.AudioTracks.Count > 1)
-                {
-                    for (int i = 1; i < loadedMedia.AudioTracks.Count; i++)
-                    {
-                        if (generation != _openMediaGeneration)
-                            return;
-
-                        int currentIndex = i;
-                        MediaPlayer mediaPlayer = new MediaPlayer();
-                        mediaPlayer.AutoPlay = false;
-                        // Auxiliary players only exist to play one extra audio track. Without
-                        // this, they build a full video pipeline with no render target, which
-                        // decodes the video once per track and can stall the player entirely
-                        // (never leaves Paused) depending on container/codec.
-                        mediaPlayer.IsVideoFrameServerEnabled = true;
-                        mediaPlayer.MediaFailed += (failedPlayer, failedArgs) =>
-                            Trace.WriteLine($"Auxiliary track {currentIndex} failed: {failedArgs.Error} {failedArgs.ExtendedErrorCode?.Message}");
-                        MediaOpened.Add(false);
-                        var trackOpenedHandler = new TypedEventHandler<MediaPlayer, object>((trackPlayer, o) =>
-                        {
-                            if (generation != _openMediaGeneration)
-                            {
-                                CloseTrackPlayer(trackPlayer);
-                                return;
-                            }
-
-                            (trackPlayer.Source as MediaPlaybackItem).AudioTracks.SelectedIndex = currentIndex;
-                            TrackPlayers.Add(trackPlayer);
-                            dispatcherQueue.TryEnqueue(() =>
-                            {
-                                if (generation != _openMediaGeneration)
-                                    return;
-
-                                AlignTrackPlayerToMain(trackPlayer);
-                            });
-                            MediaOpened[currentIndex - 1] = true;
-                            if (MediaOpened.All(x => x))
-                            {
-                                dispatcherQueue.TryEnqueue(() =>
-                                {
-                                    if (generation != _openMediaGeneration)
-                                        return;
-
-                                    SyncTrackPlayersToMain(force: true);
-                                    List<MediaPlayer> list = new List<MediaPlayer>();
-                                    list.Add(MainMediaPlayer.MediaPlayer);
-                                    list.AddRange(GetAuxiliaryTrackSnapshot());
-                                    // Fire MediaLoaded first so the handler can apply preset
-                                    // volumes before any auxiliary track begins playing.
-                                    MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
-                                    StartAuxiliaryTracks();
-                                });
-                            }
-                        });
-                        TrackOpenedHandlers[mediaPlayer] = trackOpenedHandler;
-                        // Subscribe before assigning Source: MediaOpened fires on a background
-                        // thread and can beat a subscription made after the assignment.
-                        mediaPlayer.MediaOpened += trackOpenedHandler;
-                        mediaPlayer.Source = new MediaPlaybackItem(MediaSource.CreateFromStorageFile(file));
-                    }
-                }
-                else
-                {
-                    dispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (generation != _openMediaGeneration)
-                            return;
-
-                        List<MediaPlayer> list = new List<MediaPlayer>();
-                        list.Add(MainMediaPlayer.MediaPlayer);
-                        MediaLoaded.Invoke(this, new MediaLoadedEventArgs(list, filePath));
-                    });
-                }
-            });
-
-            MediaFailedHandler = (sender, args) =>
-            {
-                if (!MediaDialogRules.ShouldShowCodecFailureDialog(currentVideo, File.Exists(currentVideo)))
+                if (!opened)
                     return;
 
-                RequestUnsupportedCodecDialog(generation);
-            };
-            MainMediaPlayer.MediaPlayer.MediaFailed += MediaFailedHandler;
+                List<AudioTrack> audioTracks = mainItem.AudioTracks.ToList();
+                if (audioTracks.Count > 0)
+                    mainItem.AudioTracks.SelectedIndex = 0;
+                List<string> trackNames = audioTracks
+                    .Select((track, index) => string.IsNullOrWhiteSpace(track.Name) ? $"Track {index + 1}" : track.Name)
+                    .ToList();
 
-            RegisterPlayerEvents();
-            RegisterControlEvents();
+                trackPlayers.AddRange(await Task.WhenAll(
+                    audioTracks.Skip(1).Select((track, index) => OpenTrackPlayerAsync(filePath, file, track, index + 1))));
+                if (generation != _openGeneration)
+                    return;
+
+                var timeline = new MediaTimelineController { ClockRate = PlaybackRate };
+                // Start/Pause/Resume change State asynchronously, so the transport follows the event.
+                timeline.StateChanged += (sender, _) => dispatcherQueue.TryEnqueue(() =>
+                {
+                    if (ReferenceEquals(_timeline, sender))
+                        NotifyPlaybackState();
+                });
+                mainPlayer.TimelineController = timeline;
+                foreach (TrackPlayer? track in trackPlayers)
+                {
+                    if (track != null)
+                        track.Player.TimelineController = timeline;
+                }
+
+                _mainPlayer = mainPlayer;
+                _trackPlayers = trackPlayers.ToArray();
+                _timeline = timeline;
+                _duration = mainPlayer.PlaybackSession.NaturalDuration;
+                owned = true;
+
+                MainMediaPlayer.SetMediaPlayer(mainPlayer);
+                mainPlayer.MediaEnded += (_, _) => dispatcherQueue.TryEnqueue(() =>
+                {
+                    if (generation == _openGeneration)
+                        OnMediaEnded();
+                });
+                mainPlayer.MediaFailed += (_, _) => RequestUnsupportedCodecDialog(generation);
+                ConfigureSystemMediaControls(mainPlayer, filePath, generation);
+
+                MediaLoaded?.Invoke(this, new MediaLoadedEventArgs(filePath, trackNames));
+                if (generation != _openGeneration)
+                    return;
+
+                timeline.Start();
+                NotifyPlaybackState();
+                UpdateTransport();
+                _progressTimer.Start();
+            }
+            finally
+            {
+                if (!owned)
+                {
+                    DisposePlayer(mainPlayer);
+                    foreach (TrackPlayer? track in trackPlayers)
+                        DisposeTrack(track);
+                }
+            }
         }
 
-        private void MediaPlayer_MediaEnded(MediaPlayer sender, object args)
+        private static async Task<TrackPlayer?> OpenTrackPlayerAsync(string path, StorageFile file, AudioTrack track, int trackIndex)
         {
+            var player = CreatePlayer();
+            if (uint.TryParse(track.Id, out uint streamIndex))
+            {
+                AudioTrackSource? source = null;
+                try
+                {
+                    source = await Task.Run(() => new AudioTrackSource(path, streamIndex));
+                    if (await OpenAsync(player, MediaSource.CreateFromMediaStreamSource(source.MediaStreamSource)))
+                        return new TrackPlayer(player, source);
+                }
+                catch (Exception ex) when (ex is COMException or ArgumentOutOfRangeException)
+                {
+                    Trace.WriteLine($"Audio-only open of track {trackIndex} failed, falling back: {ex.Message}");
+                }
+
+                source?.Dispose();
+            }
+
+            // Fallback: the whole container with this track selected. This decodes the video a
+            // second time, so it is only used when Media Foundation can't read the track alone.
+            player.IsVideoFrameServerEnabled = true;
+            var item = new MediaPlaybackItem(MediaSource.CreateFromStorageFile(file));
+            if (await OpenAsync(player, item))
+            {
+                item.AudioTracks.SelectedIndex = trackIndex;
+                return new TrackPlayer(player, null);
+            }
+
+            DisposePlayer(player);
+            return null;
+        }
+
+        private static MediaPlayer CreatePlayer()
+        {
+            var player = new MediaPlayer { AutoPlay = false };
+            player.CommandManager.IsEnabled = false;
+            return player;
+        }
+
+        private static async Task<bool> OpenAsync(MediaPlayer player, IMediaPlaybackSource source)
+        {
+            var result = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            TypedEventHandler<MediaPlayer, object> opened = (_, _) => result.TrySetResult(true);
+            TypedEventHandler<MediaPlayer, MediaPlayerFailedEventArgs> failed = (_, args) =>
+            {
+                Trace.WriteLine($"Media failed: {args.Error} {args.ErrorMessage}");
+                result.TrySetResult(false);
+            };
+
+            player.MediaOpened += opened;
+            player.MediaFailed += failed;
+            try
+            {
+                player.Source = source;
+                return await result.Task.WaitAsync(OpenTimeout);
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+            finally
+            {
+                player.MediaOpened -= opened;
+                player.MediaFailed -= failed;
+            }
+        }
+
+        private static bool IsUnsupported(MediaPlaybackItem item) =>
+            (item.VideoTracks.Count > 0 && item.VideoTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported)
+            || (item.AudioTracks.Count > 0 && item.AudioTracks[0].SupportInfo.DecoderStatus != MediaDecoderStatus.FullySupported);
+
+        /// <summary>Stops playback and releases every player and file handle.</summary>
+        public void CloseMedia()
+        {
+            _progressTimer.Stop();
+            _scrubbing = false;
+
+            _timeline?.Pause();
+            _timeline = null;
+
+            MediaPlayer? mainPlayer = _mainPlayer;
+            _mainPlayer = null;
+            if (mainPlayer != null)
+            {
+                try
+                {
+                    MainMediaPlayer.SetMediaPlayer(null);
+                }
+                catch (Exception ex) when (ex is COMException or ArgumentException)
+                {
+                }
+
+                DisposePlayer(mainPlayer);
+            }
+
+            foreach (TrackPlayer? track in _trackPlayers)
+                DisposeTrack(track);
+            _trackPlayers = [];
+            _duration = TimeSpan.Zero;
+            _seekTarget = null;
+            NotifyPlaybackState();
+            UpdateTransport();
+        }
+
+        public void Dispose()
+        {
+            ++_openGeneration;
+            CloseMedia();
+            PlaylistConfig.PropertyChanged -= PlaylistConfig_PropertyChanged;
+        }
+
+        private static void DisposeTrack(TrackPlayer? track)
+        {
+            if (track == null)
+                return;
+
+            DisposePlayer(track.Player);
+            track.AudioOnlySource?.Dispose();
+        }
+
+        private static void DisposePlayer(MediaPlayer player)
+        {
+            try
+            {
+                player.Source = null;
+                player.Dispose();
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        public void Play()
+        {
+            if (_timeline == null)
+                return;
+
+            if (_duration > TimeSpan.Zero && Position >= _duration - TimeSpan.FromMilliseconds(50))
+                SetTimelinePosition(TimeSpan.Zero);
+
+            _timeline.Resume();
+            NotifyPlaybackState();
+        }
+
+        public void Pause()
+        {
+            if (_timeline == null)
+                return;
+
+            _timeline.Pause();
+            NotifyPlaybackState();
+        }
+
+        public void TogglePlayPause()
+        {
+            if (IsPlaying)
+                Pause();
+            else
+                Play();
+        }
+
+        public void Seek(TimeSpan position)
+        {
+            if (_timeline == null)
+                return;
+
+            if (position < TimeSpan.Zero)
+                position = TimeSpan.Zero;
+            if (_duration > TimeSpan.Zero && position > _duration)
+                position = _duration;
+
+            SetTimelinePosition(position);
+            UpdateTransport();
+        }
+
+        private void SetTimelinePosition(TimeSpan position)
+        {
+            _timeline!.Position = position;
+            _seekTarget = position;
+            _seekTick = Environment.TickCount64;
+        }
+
+        public void FastForward(int timeMillis) =>
+            Seek(SeekMath.AddOffset(Position, timeMillis, _duration));
+
+        public void Rewind(int timeMillis) =>
+            Seek(SeekMath.AddOffset(Position, -timeMillis, _duration));
+
+        /// <summary>The speed picked in the speed flyout; it survives video changes.</summary>
+        public void SetPlaybackRate(double rate)
+        {
+            _baseRate = rate;
+            ApplyPlaybackRate();
+        }
+
+        /// <summary>A hold speed (keyboard or right mouse button); ending it restores the picked speed.</summary>
+        public void BeginTemporaryRate(double rate)
+        {
+            _temporaryRate = rate;
+            ApplyPlaybackRate();
+        }
+
+        public void EndTemporaryRate()
+        {
+            if (_temporaryRate == null)
+                return;
+
+            _temporaryRate = null;
+            ApplyPlaybackRate();
+        }
+
+        private void ApplyPlaybackRate()
+        {
+            if (_timeline != null)
+                _timeline.ClockRate = PlaybackRate;
+            customMixedMediaPlayerControl?.SetPlaybackRateSelection(PlaybackRate);
+        }
+
+        public void SetVolume(int trackIndex, double volume)
+        {
+            volume /= 100;
+            if (trackIndex == 0)
+            {
+                if (_mainPlayer != null)
+                    _mainPlayer.Volume = volume;
+                return;
+            }
+
+            if (trackIndex > 0 && trackIndex <= _trackPlayers.Length && _trackPlayers[trackIndex - 1] is TrackPlayer track)
+                track.Player.Volume = volume;
+        }
+
+        private void OnMediaEnded()
+        {
+            if (!IsPlaying)
+                return;
+
+            _timeline!.Pause();
+            SetTimelinePosition(_duration);
+            NotifyPlaybackState();
+            UpdateTransport();
+
             switch (AutoplayMode)
             {
-                case AutoplayMode.Off:
-                    break;
                 case AutoplayMode.Forward:
                     PlayNextTrack();
                     break;
@@ -390,86 +498,297 @@ namespace TrackMixerv2
             }
         }
 
-        private void MediaPlayer_SeekCompleted(MediaPlayer sender, object args)
-        {
-            // SeekCompleted also fires on a background thread.
-            dispatcherQueue.TryEnqueue(() =>
-            {
-                if (!_isDisposing)
-                    SyncTrackPlayersToMain(force: true);
-            });
-        }
+        public void PlayNextTrack() => _ = NavigateAsync(Direction.Next);
 
-        private void SystemMediaTransportControls_ButtonPressed(SystemMediaTransportControls sender, SystemMediaTransportControlsButtonPressedEventArgs args)
+        public void PlayPreviousTrack() => _ = NavigateAsync(Direction.Previous);
+
+        private async Task NavigateAsync(Direction direction)
         {
-            switch (args.Button)
+            try
             {
-                case SystemMediaTransportControlsButton.Play:
-                    dispatcherQueue.TryEnqueue(() => PlayAll());
-                    break;
-                case SystemMediaTransportControlsButton.Pause:
-                    dispatcherQueue.TryEnqueue(() => PauseAll());
-                    break;
+                string? target = await GetTrack(PlaylistConfig, currentVideo, direction);
+                if (target != null)
+                    OpenMedia(target);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Playlist navigation failed: {ex}");
             }
         }
 
-        public void SetVolume(int trackIndex, double volume)
+        private async Task AdvancePastUnavailableAsync(string? unavailablePath, int generation)
         {
-            volume = volume / 100;
-            if (trackIndex == 0)
+            currentVideo = null;
+            if (string.IsNullOrWhiteSpace(unavailablePath))
+                return;
+
+            foreach (Direction direction in new[] { Direction.Next, Direction.Previous })
             {
-                MainMediaPlayer.MediaPlayer.Volume = volume;
+                string? target = await GetTrack(PlaylistConfig, unavailablePath, direction);
+                if (generation != _openGeneration)
+                    return;
+
+                if (target != null && !string.Equals(target, unavailablePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    OpenMedia(target);
+                    return;
+                }
+            }
+        }
+
+        private void PlaylistConfig_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (currentVideo != null)
+                PrewarmPlaylistIndex(PlaylistConfig, currentVideo);
+
+            if (PlaylistConfig.PlaylistMode == PlaylistMode.Chrono)
+                return;
+
+            string? ratedVideo = IsInRatings(PlaylistConfig, currentVideo);
+            if (ratedVideo != null)
+                dispatcherQueue.TryEnqueue(() => OpenMedia(ratedVideo));
+        }
+
+        private void NotifyPlaybackState()
+        {
+            customMixedMediaPlayerControl?.SetPlaying(IsPlaying);
+            if (_mainPlayer != null)
+            {
+                _mainPlayer.SystemMediaTransportControls.PlaybackStatus = IsPlaying
+                    ? MediaPlaybackStatus.Playing
+                    : MediaPlaybackStatus.Paused;
+            }
+
+            PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ConfigureSystemMediaControls(MediaPlayer player, string path, int generation)
+        {
+            // With the CommandManager off (required by the timeline controller) the media keys
+            // and the Windows media flyout are this class's job.
+            SystemMediaTransportControls controls = player.SystemMediaTransportControls;
+            controls.IsEnabled = true;
+            controls.IsPlayEnabled = true;
+            controls.IsPauseEnabled = true;
+            controls.DisplayUpdater.Type = MediaPlaybackType.Video;
+            controls.DisplayUpdater.VideoProperties.Title = Path.GetFileName(path);
+            controls.DisplayUpdater.Update();
+            controls.ButtonPressed += (_, args) => dispatcherQueue.TryEnqueue(() =>
+            {
+                if (generation != _openGeneration)
+                    return;
+
+                if (args.Button == SystemMediaTransportControlsButton.Play)
+                    Play();
+                else if (args.Button == SystemMediaTransportControlsButton.Pause)
+                    Pause();
+            });
+        }
+
+        private void UpdateTransport()
+        {
+            MixedMediaPlayerControl control = customMixedMediaPlayerControl;
+            if (control == null)
+                return;
+
+            // The template can be applied after Loaded; hooking is idempotent.
+            HookControlEvents();
+
+            TimeSpan position = Position;
+            if (_timeline != null && IsPlaying && _duration > TimeSpan.Zero && _timeline.Position >= _duration)
+            {
+                // Safety net in case MediaEnded never arrives: the controller keeps running past the end.
+                OnMediaEnded();
                 return;
             }
 
-            if (TrackPlayers != null && trackIndex > 0 && trackIndex <= TrackPlayers.Count)
+            Slider? slider = control.ProgressSlider;
+            if (slider != null && !_scrubbing)
             {
-                TrackPlayers[trackIndex - 1].Volume = volume;
+                _updatingProgress = true;
+                slider.Maximum = Math.Max(_duration.TotalSeconds, 0);
+                slider.Value = position.TotalSeconds;
+                _updatingProgress = false;
+            }
+
+            control.SetTimes(_scrubbing && slider != null ? TimeSpan.FromSeconds(slider.Value) : position, _duration);
+
+            if (UiTestBootstrap.IsEnabled)
+                UpdateDiagnostics(position);
+        }
+
+        private void UpdateDiagnostics(TimeSpan position)
+        {
+            var tracks = new List<object>();
+            if (_mainPlayer != null)
+                tracks.Add(DescribePlayer(0, _mainPlayer, "video"));
+            for (int i = 0; i < _trackPlayers.Length; i++)
+            {
+                if (_trackPlayers[i] is TrackPlayer track)
+                    tracks.Add(DescribePlayer(i + 1, track.Player, track.AudioOnlySource != null ? "audio-only" : "fallback"));
+                else
+                    tracks.Add(new { index = i + 1, kind = "missing" });
+            }
+
+            PlaybackDiagnostics.Text = JsonSerializer.Serialize(new
+            {
+                path = currentVideo,
+                state = _timeline?.State.ToString() ?? "None",
+                position = position.TotalSeconds,
+                duration = _duration.TotalSeconds,
+                rate = PlaybackRate,
+                tracks,
+            });
+        }
+
+        private static object DescribePlayer(int index, MediaPlayer player, string kind)
+        {
+            try
+            {
+                return new
+                {
+                    index,
+                    kind,
+                    position = player.PlaybackSession.Position.TotalSeconds,
+                    state = player.PlaybackSession.PlaybackState.ToString(),
+                    volume = player.Volume,
+                };
+            }
+            catch (COMException)
+            {
+                return new { index, kind, state = "Error" };
             }
         }
 
-        public async void PlayNextTrack()
+        private void HookControlEvents()
         {
-            string nextVideo = await GetTrack(PlaylistConfig, currentVideo, Direction.Next);
-            if (nextVideo == null) return;
+            MixedMediaPlayerControl control = customMixedMediaPlayerControl;
+            if (_controlEventsHooked || control?.ProgressSlider == null)
+                return;
 
-            dispatcherQueue.TryEnqueue(() =>
+            _controlEventsHooked = true;
+            if (control.PlayPauseButton != null)
+                control.PlayPauseButton.Click += (_, _) => TogglePlayPause();
+            if (control.PlayPauseButtonOnLeft != null)
+                control.PlayPauseButtonOnLeft.Click += (_, _) => TogglePlayPause();
+            if (control.NextTrackButton != null)
+                control.NextTrackButton.Click += (_, _) => PlayNextTrack();
+            if (control.PreviousTrackButton != null)
+                control.PreviousTrackButton.Click += (_, _) => PlayPreviousTrack();
+            if (control.FullScreenButton != null)
+                control.FullScreenButton.Click += (_, _) => FullScreenToggleRequested?.Invoke(this, EventArgs.Empty);
+            foreach (RadioMenuFlyoutItem? option in new[] { control.AutoplayForwardOption, control.AutoplayBackwardOption, control.AutoplayOffOption })
             {
-                OpenMediaAsync(nextVideo);
-            });
+                if (option != null)
+                    option.Click += AutoplayOption_Click;
+            }
+
+            control.EnsureCustomPlaybackRateFlyout();
+            if (control.PlaybackRateSlider != null)
+                control.PlaybackRateSlider.ValueChanged += PlaybackRateSlider_ValueChanged;
+
+            Slider slider = control.ProgressSlider;
+            slider.Minimum = 0;
+            slider.SmallChange = 1;
+            slider.LargeChange = 10;
+            slider.StepFrequency = 0.1;
+            slider.ValueChanged += ProgressSlider_ValueChanged;
+            // The slider marks pointer events handled while it drags, so listen to handled ones too.
+            slider.AddHandler(PointerPressedEvent, new PointerEventHandler(ProgressSlider_PointerPressed), true);
+            slider.AddHandler(PointerReleasedEvent, new PointerEventHandler(ProgressSlider_PointerReleased), true);
+            slider.AddHandler(PointerCaptureLostEvent, new PointerEventHandler(ProgressSlider_PointerReleased), true);
+
+            UpdateAutoplayFlyoutSelection();
+            control.SetPlaybackRateSelection(PlaybackRate);
+            control.SetPlaying(IsPlaying);
+            UpdateTransport();
         }
 
-        public async void PlayPreviousTrack()
+        private void ProgressSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            string previousVideo = await GetTrack(PlaylistConfig, currentVideo, Direction.Previous);
-            if (previousVideo == null) return;
+            if (_timeline == null || _scrubbing)
+                return;
 
-            dispatcherQueue.TryEnqueue(() =>
-            {
-                OpenMediaAsync(previousVideo);
-            });
+            _scrubbing = true;
+            _resumeAfterScrub = IsPlaying;
+            _lastScrubSeekTick = 0;
+            Pause();
         }
 
-        public void PlayAll()
+        private void ProgressSlider_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
-            SyncTrackPlayersToMain(force: true);
-            MainMediaPlayer.MediaPlayer.Play();
-            // Start aux tracks immediately without waiting for the async state transition.
-            // MediaPlayer_CurrentStateChanged (dispatched to UI thread) will also call
-            // StartAuxiliaryTracks once the Playing state is confirmed, which is idempotent.
-            ForEachAuxiliaryTrack(trackPlayer =>
-            {
-                try { trackPlayer.Play(); }
-                catch (COMException) { }
-            });
-            StartSyncTimer();
+            if (!_scrubbing)
+                return;
+
+            _scrubbing = false;
+            Seek(TimeSpan.FromSeconds(((Slider)sender).Value));
+            if (_resumeAfterScrub)
+                Play();
         }
 
-        public void PauseAll()
+        // Clicks, drags, the mouse wheel (SliderWheelBehavior: SmallChange is one second) and
+        // the keyboard all arrive here; programmatic progress updates are filtered out.
+        private void ProgressSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
-            StopSyncTimer();
-            PauseAuxiliaryTracks();
-            MainMediaPlayer.MediaPlayer.Pause();
+            if (_updatingProgress || _timeline == null)
+                return;
+
+            if (_scrubbing)
+            {
+                long now = Environment.TickCount64;
+                if (now - _lastScrubSeekTick < ScrubSeekIntervalMs)
+                    return;
+                _lastScrubSeekTick = now;
+            }
+
+            Seek(TimeSpan.FromSeconds(e.NewValue));
+        }
+
+        private void PlaybackRateSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            MixedMediaPlayerControl control = customMixedMediaPlayerControl;
+            if (control == null || control.IsSyncingPlaybackRateSlider)
+                return;
+
+            if (control.TryGetSelectedPlaybackRate(out double rate))
+                SetPlaybackRate(rate);
+        }
+
+        private void AutoplayOption_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not RadioMenuFlyoutItem item || item.Tag is not string option)
+                return;
+
+            AutoplayMode = option switch
+            {
+                "forward" => AutoplayMode.Forward,
+                "backward" => AutoplayMode.Backward,
+                _ => AutoplayMode.Off,
+            };
+            UpdateAutoplayFlyoutSelection();
+        }
+
+        private void UpdateAutoplayFlyoutSelection()
+        {
+            MixedMediaPlayerControl control = customMixedMediaPlayerControl;
+            if (control?.AutoplaySmallIcon == null)
+                return;
+
+            switch (AutoplayMode)
+            {
+                case AutoplayMode.Forward:
+                    control.AutoplaySmallIcon.Glyph = "";
+                    control.AutoplayForwardOption.IsChecked = true;
+                    break;
+                case AutoplayMode.Backward:
+                    control.AutoplaySmallIcon.Glyph = "";
+                    control.AutoplayBackwardOption.IsChecked = true;
+                    break;
+                default:
+                    control.AutoplaySmallIcon.Glyph = "";
+                    control.AutoplayOffOption.IsChecked = true;
+                    break;
+            }
         }
 
         public void SetFullScreenButtonState(bool isFullScreen)
@@ -482,444 +801,87 @@ namespace TrackMixerv2
                 ToolTipService.SetToolTip(customMixedMediaPlayerControl.FullScreenButton, isFullScreen ? "Exit fullscreen" : "Fullscreen");
         }
 
-        private void FullScreenButton_Click(object sender, RoutedEventArgs e)
+        private async void MainMediaPlayer_DragStarting(UIElement sender, DragStartingEventArgs args)
         {
-            FullScreenToggleRequested?.Invoke(this, EventArgs.Empty);
-        }
-
-        public void RegisterControlEvents()
-        {
-            if (customMixedMediaPlayerControl != null)
+            string? video = currentVideo;
+            if (video == null || !File.Exists(video))
             {
-                if (customMixedMediaPlayerControl.ProgressSlider != null)
-                {
-                    customMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
-                    customMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
-                    customMixedMediaPlayerControl.ProgressSlider.PointerPressed += ProgressSlider_PointerPressed;
-                    customMixedMediaPlayerControl.ProgressSlider.PointerReleased += ProgressSlider_PointerReleased;
-                }
-
-                if (customMixedMediaPlayerControl.NextTrackButton != null)
-                {
-                    customMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
-                    customMixedMediaPlayerControl.NextTrackButton.Click += NextTrackButton_Click;
-                }
-                if (customMixedMediaPlayerControl.PreviousTrackButton != null)
-                {
-                    customMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
-                    customMixedMediaPlayerControl.PreviousTrackButton.Click += PreviousTrackButton_Click;
-                }
-                if (customMixedMediaPlayerControl.AutoplayForwardOption != null)
-                {
-                    customMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
-                    customMixedMediaPlayerControl.AutoplayForwardOption.Click += AutoplayOption_Click;
-                }
-                if (customMixedMediaPlayerControl.AutoplayBackwardOption != null)
-                {
-                    customMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
-                    customMixedMediaPlayerControl.AutoplayBackwardOption.Click += AutoplayOption_Click;
-                }
-                if (customMixedMediaPlayerControl.AutoplayOffOption != null)
-                {
-                    customMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
-                    customMixedMediaPlayerControl.AutoplayOffOption.Click += AutoplayOption_Click;
-                }
-                if (customMixedMediaPlayerControl.FullScreenButton != null)
-                {
-                    customMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
-                    customMixedMediaPlayerControl.FullScreenButton.Click += FullScreenButton_Click;
-                }
-
-                customMixedMediaPlayerControl.EnsureCustomPlaybackRateFlyout();
-                if (customMixedMediaPlayerControl.PlaybackRateSlider != null)
-                {
-                    customMixedMediaPlayerControl.PlaybackRateSlider.ValueChanged -= PlaybackRateSlider_ValueChanged;
-                    customMixedMediaPlayerControl.PlaybackRateSlider.ValueChanged += PlaybackRateSlider_ValueChanged;
-                }
-
-                UpdateAutoplayFlyoutSelection();
-                if (MainMediaPlayer?.MediaPlayer != null)
-                    customMixedMediaPlayerControl.SetPlaybackRateSelection(MainMediaPlayer.MediaPlayer.PlaybackRate);
-
-                customMixedMediaPlayerControl.Loaded -= CustomMixedMediaPlayerControl_Loaded;
-                customMixedMediaPlayerControl.Loaded += CustomMixedMediaPlayerControl_Loaded;
-            }
-        }
-
-        private void PlaybackRateSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
-        {
-            if (customMixedMediaPlayerControl == null || customMixedMediaPlayerControl.IsSyncingPlaybackRateSlider)
+                args.Cancel = true;
                 return;
-
-            if (customMixedMediaPlayerControl.TryGetSelectedPlaybackRate(out double rate))
-                ChangePlaybackSpeed(rate);
-        }
-
-        private void UpdateAutoplayFlyoutSelection()
-        {
-            if (customMixedMediaPlayerControl == null)
-                return;
-
-            switch (AutoplayMode)
-            {
-                case AutoplayMode.Forward:
-                    customMixedMediaPlayerControl.AutoplayForwardOption.IsChecked = true;
-                    break;
-                case AutoplayMode.Backward:
-                    customMixedMediaPlayerControl.AutoplayBackwardOption.IsChecked = true;
-                    break;
-                default:
-                    customMixedMediaPlayerControl.AutoplayOffOption.IsChecked = true;
-                    break;
             }
-        }
 
-        private void ProgressSlider_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
-        {
-            PauseAll();
-        }
-
-        private void ProgressSlider_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
-        {
-            PlayAll();
-        }
-
-        public void DeRegisterControlEvents()
-        {
-            if (customMixedMediaPlayerControl != null)
-            {
-                if (customMixedMediaPlayerControl.NextTrackButton != null)
-                    customMixedMediaPlayerControl.NextTrackButton.Click -= NextTrackButton_Click;
-                if (customMixedMediaPlayerControl.PreviousTrackButton != null)
-                    customMixedMediaPlayerControl.PreviousTrackButton.Click -= PreviousTrackButton_Click;
-                if (customMixedMediaPlayerControl.AutoplayForwardOption != null)
-                    customMixedMediaPlayerControl.AutoplayForwardOption.Click -= AutoplayOption_Click;
-                if (customMixedMediaPlayerControl.AutoplayBackwardOption != null)
-                    customMixedMediaPlayerControl.AutoplayBackwardOption.Click -= AutoplayOption_Click;
-                if (customMixedMediaPlayerControl.AutoplayOffOption != null)
-                    customMixedMediaPlayerControl.AutoplayOffOption.Click -= AutoplayOption_Click;
-                if (customMixedMediaPlayerControl.ProgressSlider != null)
-                {
-                    customMixedMediaPlayerControl.ProgressSlider.PointerPressed -= ProgressSlider_PointerPressed;
-                    customMixedMediaPlayerControl.ProgressSlider.PointerReleased -= ProgressSlider_PointerReleased;
-                }
-                if (customMixedMediaPlayerControl.FullScreenButton != null)
-                    customMixedMediaPlayerControl.FullScreenButton.Click -= FullScreenButton_Click;
-                if (customMixedMediaPlayerControl.PlaybackRateSlider != null)
-                    customMixedMediaPlayerControl.PlaybackRateSlider.ValueChanged -= PlaybackRateSlider_ValueChanged;
-                customMixedMediaPlayerControl.Loaded -= CustomMixedMediaPlayerControl_Loaded;
-            }
-        }
-
-        public void RegisterPlayerEvents()
-        {
-            if (PlaylistConfig != null)
-                PlaylistConfig.PropertyChanged += PlaylistConfig_PropertyChanged;
-            if (MainMediaPlayer != null)
-            {
-                if (MainMediaPlayer.MediaPlayer != null)
-                {
-                    MainMediaPlayer.MediaPlayer.MediaOpened += MediaOpenedHandler;
-                    MainMediaPlayer.MediaPlayer.CurrentStateChanged += MediaPlayer_CurrentStateChanged;
-                    MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed += SystemMediaTransportControls_ButtonPressed;
-                    MainMediaPlayer.MediaPlayer.SeekCompleted += MediaPlayer_SeekCompleted;
-                    MainMediaPlayer.MediaPlayer.MediaPlayerRateChanged += MediaPlayer_MediaPlayerRateChanged;
-                    MainMediaPlayer.MediaPlayer.MediaEnded += MediaPlayer_MediaEnded;
-                }
-                MainMediaPlayer.DragStarting += MainMediaPlayer_DragStarting;
-            }
-        }
-
-        public void DeRegisterPlayerEvents()
-        {
-            if (PlaylistConfig != null)
-                PlaylistConfig.PropertyChanged -= PlaylistConfig_PropertyChanged;
-            if (MainMediaPlayer != null)
-            {
-                if (MainMediaPlayer.MediaPlayer != null)
-                {
-                    MainMediaPlayer.MediaPlayer.MediaOpened -= MediaOpenedHandler;
-                    MainMediaPlayer.MediaPlayer.CurrentStateChanged -= MediaPlayer_CurrentStateChanged;
-                    MainMediaPlayer.MediaPlayer.MediaFailed -= MediaFailedHandler;
-                    MainMediaPlayer.MediaPlayer.SystemMediaTransportControls.ButtonPressed -= SystemMediaTransportControls_ButtonPressed;
-                    MainMediaPlayer.MediaPlayer.SeekCompleted -= MediaPlayer_SeekCompleted;
-                    MainMediaPlayer.MediaPlayer.MediaPlayerRateChanged -= MediaPlayer_MediaPlayerRateChanged;
-                    MainMediaPlayer.MediaPlayer.MediaEnded -= MediaPlayer_MediaEnded;
-                }
-                MainMediaPlayer.DragStarting -= MainMediaPlayer_DragStarting;
-            }
-            foreach (var kvp in TrackOpenedHandlers.ToList())
-            {
-                kvp.Key.MediaOpened -= kvp.Value;
-                CloseTrackPlayer(kvp.Key);
-            }
-            TrackOpenedHandlers.Clear();
-        }
-
-        private static void CloseTrackPlayer(MediaPlayer? trackPlayer)
-        {
-            if (trackPlayer == null)
-                return;
-
-            trackPlayer.Pause();
-            trackPlayer.Source = null;
-        }
-
-        public static void OffsetMediaPlayerPlaybackPosition(MediaPlayer mediaPlayer, int offsetMillis)
-        {
-            TimeSpan newPosition = AudioTrackSync.AddOffset(
-                mediaPlayer.Position,
-                offsetMillis,
-                mediaPlayer.NaturalDuration);
-
-            if (newPosition == mediaPlayer.Position)
-                return;
-
-            mediaPlayer.Position = newPosition;
-        }
-
-        private IReadOnlyList<MediaPlayer> GetAuxiliaryTrackSnapshot() => TrackPlayers.ToList();
-
-        private void ForEachAuxiliaryTrack(Action<MediaPlayer> action)
-        {
-            foreach (MediaPlayer trackPlayer in GetAuxiliaryTrackSnapshot())
-                action(trackPlayer);
-        }
-
-        private void PauseAuxiliaryTracks()
-        {
-            ForEachAuxiliaryTrack(trackPlayer =>
-            {
-                try
-                {
-                    trackPlayer.Pause();
-                }
-                catch (COMException)
-                {
-                }
-            });
-        }
-
-        private void StartAuxiliaryTracks()
-        {
-            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
-                return;
-
-            MediaPlayerState mainState;
+            var deferral = args.GetDeferral();
             try
             {
-                mainState = mainPlayer.CurrentState;
+                StorageFile file = await StorageFile.GetFileFromPathAsync(video);
+                StorageItemThumbnail thumbnail = await file.GetThumbnailAsync(ThumbnailMode.VideosView);
+                var bitmap = new BitmapImage();
+                await bitmap.SetSourceAsync(thumbnail);
+
+                args.DragUI.SetContentFromBitmapImage(bitmap);
+                args.Data.RequestedOperation = DataPackageOperation.Copy;
+                args.AllowedOperations = DataPackageOperation.Copy;
+                args.Data.SetStorageItems(new[] { file }, false);
+                Pause();
             }
-            catch (COMException)
+            catch (Exception ex)
             {
-                return;
+                Trace.WriteLine($"Drag of '{video}' failed: {ex.Message}");
             }
-
-            if (mainState != MediaPlayerState.Playing)
-                return;
-
-            ForEachAuxiliaryTrack(trackPlayer =>
+            finally
             {
-                try
-                {
-                    trackPlayer.Play();
-                }
-                catch (COMException)
-                {
-                }
-            });
-        }
-
-        private void AlignTrackPlayerToMain(MediaPlayer trackPlayer)
-        {
-            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
-                return;
-
-            try
-            {
-                trackPlayer.Position = mainPlayer.Position;
-                if (mainPlayer.CurrentState == MediaPlayerState.Playing)
-                    trackPlayer.Play();
-            }
-            catch (COMException)
-            {
+                deferral.Complete();
             }
         }
 
-        private void SyncTrackPlayersToMain(bool force = false)
+        private void MainMediaPlayer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            if (_isDisposing || TrackPlayers.Count == 0 || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+            if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Mouse)
+                return;
+            if (!e.GetCurrentPoint((UIElement)sender).Properties.IsRightButtonPressed)
+                return;
+            // Only on the video itself, not on the transport bar.
+            if ((e.OriginalSource as Grid)?.Name != "RootGrid")
                 return;
 
-            TimeSpan masterPosition;
-            try
-            {
-                masterPosition = mainPlayer.Position;
-            }
-            catch (COMException)
-            {
-                return;
-            }
-
-            foreach (MediaPlayer trackPlayer in GetAuxiliaryTrackSnapshot())
-            {
-                try
-                {
-                    if (force || AudioTrackSync.ShouldResync(
-                        masterPosition,
-                        trackPlayer.Position,
-                        AudioTrackSync.DefaultResyncThreshold))
-                    {
-                        trackPlayer.Position = masterPosition;
-                    }
-                }
-                catch (COMException)
-                {
-                }
-            }
+            _rightHoldActive = true;
+            BeginTemporaryRate(RightClickHoldRate);
         }
 
-        private async Task TryAdvancePastUnavailableMediaAsync(string? unavailablePath)
+        private void MainMediaPlayer_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
-            string? anchorPath = string.IsNullOrWhiteSpace(unavailablePath) ? currentVideo : unavailablePath;
-            ++_openMediaGeneration;
-            Dispose();
-            _isDisposing = false;
-            currentVideo = null;
-
-            if (string.IsNullOrWhiteSpace(anchorPath))
+            if (!_rightHoldActive)
                 return;
 
-            string? nextVideo = await GetTrack(PlaylistConfig, anchorPath, Direction.Next);
-            if (nextVideo != null && !string.Equals(nextVideo, anchorPath, StringComparison.OrdinalIgnoreCase))
-            {
-                dispatcherQueue.TryEnqueue(() => OpenMediaAsync(nextVideo));
-                return;
-            }
-
-            string? previousVideo = await GetTrack(PlaylistConfig, anchorPath, Direction.Previous);
-            if (previousVideo != null && !string.Equals(previousVideo, anchorPath, StringComparison.OrdinalIgnoreCase))
-                dispatcherQueue.TryEnqueue(() => OpenMediaAsync(previousVideo));
+            _rightHoldActive = false;
+            EndTemporaryRate();
         }
 
-        private bool TryGetMainMediaPlayer(out MediaPlayer? mediaPlayer)
+        private void RequestUnsupportedCodecDialog(int mediaGeneration)
         {
-            mediaPlayer = null;
-            if (MainMediaPlayer == null)
-                return false;
-
-            try
-            {
-                mediaPlayer = MainMediaPlayer.MediaPlayer;
-                return mediaPlayer != null;
-            }
-            catch (COMException)
-            {
-                return false;
-            }
-        }
-
-        private void StartSyncTimer()
-        {
-            if (_syncTimer != null)
+            if (UiTestBootstrap.IsEnabled)
                 return;
 
-            _syncTimer = dispatcherQueue.CreateTimer();
-            _syncTimer.Interval = AudioTrackSync.SyncCheckInterval;
-            _syncTimer.Tick += SyncTimer_Tick;
-            _syncTimer.Start();
+            dispatcherQueue.TryEnqueue(() => _ = ShowUnsupportedCodecDialogAsync(mediaGeneration));
         }
 
-        private void StopSyncTimer()
+        private async Task ShowUnsupportedCodecDialogAsync(int mediaGeneration)
         {
-            if (_syncTimer == null)
+            if (!MediaDialogRules.ShouldShowForOpenGeneration(mediaGeneration, _openGeneration))
                 return;
 
-            _syncTimer.Stop();
-            _syncTimer.Tick -= SyncTimer_Tick;
-            _syncTimer = null;
-        }
-
-        private void SyncTimer_Tick(DispatcherQueueTimer sender, object args)
-        {
-            if (_isDisposing || !TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
+            if (!MediaDialogRules.ShouldShowCodecFailureDialog(currentVideo, File.Exists(currentVideo)))
                 return;
 
-            try
+            var dialog = new ContentDialog
             {
-                if (mainPlayer.CurrentState != MediaPlayerState.Playing)
-                    return;
-            }
-            catch (COMException)
-            {
-                StopSyncTimer();
-                return;
-            }
+                XamlRoot = XamlRoot,
+                Title = "Audio/video codec might be unsupported. Audio/video might not play.",
+                Content = "Download the appropiate Audio/video Extension (e.g. AV1, HEVC, VP9, Web Media Extensions) from the Microsoft Store or check the Discord for support.",
+                CloseButtonText = "Dismiss"
+            };
 
-            SyncTrackPlayersToMain();
-        }
-
-        public void FastForward(int timeMillis)
-        {
-            OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, timeMillis);
-            ForEachAuxiliaryTrack(trackPlayer => OffsetMediaPlayerPlaybackPosition(trackPlayer, timeMillis));
-        }
-
-        public void Rewind(int timeMillis)
-        {
-            OffsetMediaPlayerPlaybackPosition(MainMediaPlayer.MediaPlayer, -timeMillis);
-            ForEachAuxiliaryTrack(trackPlayer => OffsetMediaPlayerPlaybackPosition(trackPlayer, -timeMillis));
-        }
-
-        public void Dispose()
-        {
-            _isDisposing = true;
-            StopSyncTimer();
-            DeRegisterPlayerEvents();
-            DeRegisterControlEvents();
-            MediaOpened = new List<bool>();
-            MediaOpenedHandler = null;
-            MediaFailedHandler = null;
-
-            if (TryGetMainMediaPlayer(out MediaPlayer? mainPlayer))
-            {
-                try
-                {
-                    mainPlayer.Pause();
-                    mainPlayer.Source = null;
-                }
-                catch (COMException)
-                {
-                }
-            }
-
-            if (TrackPlayers != null)
-            {
-                foreach (MediaPlayer trackPlayer in TrackPlayers)
-                    CloseTrackPlayer(trackPlayer);
-
-                TrackPlayers.Clear();
-            }
-        }
-
-        private void MainMediaPlayer_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
-        {
-            if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse)
-            {
-                var pointerPoint = e.GetCurrentPoint((UIElement)sender);
-                if (!pointerPoint.Properties.IsRightButtonPressed) return;
-            }
-            else
-            {
-                return;
-            }
-            if ((e.OriginalSource as Grid)?.Name != "RootGrid") return;
-            ChangePlaybackSpeed(2.0);
-        }
-
-        private void MainMediaPlayer_PointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
-        {
-            ChangePlaybackSpeed(1.0);
+            await ContentDialogPresenter.ShowAsync(dialog);
         }
     }
 }
