@@ -24,8 +24,8 @@ public sealed class DeleteVideoScenarioTests : IDisposable
 
         var config = ChronoConfig();
 
-        Assert.Equal(latest, await ResolveDeleteTargetAsync(config, middle, PlaylistHelper.Direction.Next));
-        Assert.Equal(first, await ResolveDeleteTargetAsync(config, middle, PlaylistHelper.Direction.Previous));
+        Assert.Equal(latest, await PlaylistHelper.ResolveDeleteTargetAsync(config, middle, PlaylistHelper.Direction.Next));
+        Assert.Equal(first, await PlaylistHelper.ResolveDeleteTargetAsync(config, middle, PlaylistHelper.Direction.Previous));
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class DeleteVideoScenarioTests : IDisposable
 
         var config = ChronoConfig();
 
-        Assert.Equal(first, await ResolveDeleteTargetAsync(config, latest, PlaylistHelper.Direction.Next));
+        Assert.Equal(first, await PlaylistHelper.ResolveDeleteTargetAsync(config, latest, PlaylistHelper.Direction.Next));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class DeleteVideoScenarioTests : IDisposable
 
         var config = ChronoConfig();
 
-        Assert.Equal(second, await ResolveDeleteTargetAsync(config, first, PlaylistHelper.Direction.Previous));
+        Assert.Equal(second, await PlaylistHelper.ResolveDeleteTargetAsync(config, first, PlaylistHelper.Direction.Previous));
     }
 
     [Fact]
@@ -58,8 +58,8 @@ public sealed class DeleteVideoScenarioTests : IDisposable
         string only = _library.AddClip("only.mp4", DateTime.Now.AddDays(-1));
         var config = ChronoConfig();
 
-        Assert.Null(await ResolveDeleteTargetAsync(config, only, PlaylistHelper.Direction.Next));
-        Assert.Null(await ResolveDeleteTargetAsync(config, only, PlaylistHelper.Direction.Previous));
+        Assert.Null(await PlaylistHelper.ResolveDeleteTargetAsync(config, only, PlaylistHelper.Direction.Next));
+        Assert.Null(await PlaylistHelper.ResolveDeleteTargetAsync(config, only, PlaylistHelper.Direction.Previous));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class DeleteVideoScenarioTests : IDisposable
         string latest = _library.AddClip("latest.mp4", baseTime.AddMinutes(5));
         var config = ChronoConfig();
 
-        string? target = await ResolveDeleteTargetAsync(config, latest, PlaylistHelper.Direction.Next);
+        string? target = await PlaylistHelper.ResolveDeleteTargetAsync(config, latest, PlaylistHelper.Direction.Next);
         Assert.Equal(first, target);
 
         File.Delete(latest);
@@ -103,21 +103,6 @@ public sealed class DeleteVideoScenarioTests : IDisposable
     private static PlaylistHelper.PlaylistConfig ChronoConfig() =>
         new(PlaylistHelper.PlaylistMode.Chrono, TimeSpan.FromDays(30), subfolderOnly: false);
 
-    private static async Task<string?> ResolveDeleteTargetAsync(
-        PlaylistHelper.PlaylistConfig config,
-        string deletedPath,
-        PlaylistHelper.Direction primary)
-    {
-        string? target = await PlaylistHelper.GetTrack(config, deletedPath, primary);
-        if (target != null)
-            return target;
-
-        PlaylistHelper.Direction fallback = primary == PlaylistHelper.Direction.Next
-            ? PlaylistHelper.Direction.Previous
-            : PlaylistHelper.Direction.Next;
-
-        return await PlaylistHelper.GetTrack(config, deletedPath, fallback);
-    }
 
     public void Dispose()
     {

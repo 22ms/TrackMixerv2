@@ -199,4 +199,18 @@ public class PlaylistHelper
                 break;
         }
     }
+
+    /// <summary>
+    /// The clip to show after deleting <paramref name="deletedPath"/>: its neighbour in the
+    /// autoplay direction, else the other one. Call before the file is gone from disk.
+    /// </summary>
+    public static async Task<string?> ResolveDeleteTargetAsync(PlaylistConfig config, string deletedPath, Direction primary)
+    {
+        string? target = await GetTrack(config, deletedPath, primary);
+        if (target != null)
+            return target;
+
+        Direction fallback = primary == Direction.Next ? Direction.Previous : Direction.Next;
+        return await GetTrack(config, deletedPath, fallback);
+    }
 }

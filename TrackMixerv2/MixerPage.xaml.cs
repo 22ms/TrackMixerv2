@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.VisualBasic.FileIO;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -621,34 +620,56 @@ namespace TrackMixerv2
             if (string.IsNullOrWhiteSpace(deletedPath))
                 return;
 
-            MixedMediaPlayer.Pause();
-
-            var config = MixedMediaPlayer.PlaylistConfig;
-            Direction primary = MixedMediaPlayer.AutoplayMode == AutoplayMode.Backward
-                ? Direction.Previous
-                : Direction.Next;
-            Direction fallback = primary == Direction.Next ? Direction.Previous : Direction.Next;
-
-            string? targetPath = await GetTrack(config, deletedPath, primary);
-            if (targetPath == null)
-                targetPath = await GetTrack(config, deletedPath, fallback);
-
             try
             {
-                if (File.Exists(deletedPath))
-                    FileSystem.DeleteFile(deletedPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                var config = MixedMediaPlayer.PlaylistConfig;
+                Direction primary = MixedMediaPlayer.AutoplayMode == AutoplayMode.Backward
+                    ? Direction.Previous
+                    : Direction.Next;
+                string? targetPath = await ResolveDeleteTargetAsync(config, deletedPath, primary);
+
+                // The players hold the file open; release it before handing it to the shell.
+                MixedMediaPlayer.CloseMedia();
+                await WaitUntilUnlockedAsync(deletedPath);
+
+                if (File.Exists(deletedPath) && !RecycleBin.TrySend(deletedPath))
+                {
+                    // Cancelled or failed: keep the clip and its rating.
+                    OpenNewMedia(deletedPath);
+                    return;
+                }
+
+                PlaylistIndexCache.NotifyMediaDeleted(deletedPath, config.SubfolderOnly);
+                TrackMetadataStore.RemoveEntry(AppState.TRACK_METADATA, deletedPath);
+                await TrackMetadataStore.PersistAsync(AppState.TRACK_METADATA, AppState.TrackMetadataJson);
+
+                if (!string.IsNullOrWhiteSpace(targetPath) && File.Exists(targetPath))
+                    OpenNewMedia(targetPath);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.Message);
+                Trace.WriteLine($"Deleting '{deletedPath}' failed: {ex}");
             }
+        }
 
-            PlaylistIndexCache.NotifyMediaDeleted(deletedPath, config.SubfolderOnly);
-            TrackMetadataStore.RemoveEntry(AppState.TRACK_METADATA, deletedPath);
-            await TrackMetadataStore.PersistAsync(AppState.TRACK_METADATA, AppState.TrackMetadataJson);
-
-            if (!string.IsNullOrWhiteSpace(targetPath) && File.Exists(targetPath))
-                OpenNewMedia(targetPath);
+        private static async Task WaitUntilUnlockedAsync(string filePath)
+        {
+            for (int attempt = 0; attempt < 20 && File.Exists(filePath); attempt++)
+            {
+                try
+                {
+                    using (new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+                        return;
+                }
+                catch (IOException)
+                {
+                    await Task.Delay(100);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return;
+                }
+            }
         }
         private void DeleteConfirmationFlyout_Closed(object sender, object e)
         {
