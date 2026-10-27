@@ -7,6 +7,7 @@ public static class UiTestBootstrap
     public const string LaunchFileEnvVar = "TRACKMIXER_LAUNCH_FILE";
     public const string RootFolderEnvVar = "TRACKMIXER_ROOT_FOLDER";
     public const string SuppressRootPromptEnvVar = "TRACKMIXER_SUPPRESS_ROOT_PROMPT";
+    public const string ThemeEnvVar = "TRACKMIXER_UITEST_THEME";
 
     private static string? isolatedStorageRoot;
 
@@ -18,6 +19,10 @@ public static class UiTestBootstrap
 
     public static string? RootFolder =>
         Environment.GetEnvironmentVariable(RootFolderEnvVar);
+
+    /// <summary>"Light" or "Dark" forces that theme in a UI test run; otherwise the system theme applies.</summary>
+    public static string? Theme =>
+        IsEnabled ? Environment.GetEnvironmentVariable(ThemeEnvVar) : null;
 
     public static bool SuppressRootFolderPrompt =>
         IsEnabled ||

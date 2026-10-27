@@ -51,6 +51,8 @@ namespace TrackMixerv2
             ExtendsContentIntoTitleBar = true;
             AppWindow.TitleBar.ButtonBackgroundColor = Color.FromArgb(0, 0, 0, 0);
             AppWindow.TitleBar.ButtonInactiveBackgroundColor = Color.FromArgb(0, 0, 0, 0);
+            RootGrid.ActualThemeChanged += (_, _) => ApplyCaptionButtonColors();
+            ApplyCaptionButtonColors();
             this.Closed += MainWindow_Closed;
 
             CustomDragRegion.Loaded += TitleBarDragRegion_Loaded;
@@ -253,6 +255,20 @@ namespace TrackMixerv2
         {
             await Task.Delay(50); // dont know why. it just so happens to work so why change it?
             ApplyTitleBar();
+        }
+
+        // The caption buttons are drawn by the system and don't follow the XAML theme.
+        private void ApplyCaptionButtonColors()
+        {
+            bool dark = RootGrid.ActualTheme == ElementTheme.Dark;
+            byte ink = dark ? (byte)0xFF : (byte)0x00;
+            AppWindowTitleBar titleBar = AppWindow.TitleBar;
+            titleBar.ButtonForegroundColor = Color.FromArgb(0xFF, ink, ink, ink);
+            titleBar.ButtonHoverForegroundColor = Color.FromArgb(0xFF, ink, ink, ink);
+            titleBar.ButtonPressedForegroundColor = Color.FromArgb(0xC0, ink, ink, ink);
+            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(0x80, ink, ink, ink);
+            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(0x18, ink, ink, ink);
+            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(0x10, ink, ink, ink);
         }
 
         private bool _applyingTitleBar;

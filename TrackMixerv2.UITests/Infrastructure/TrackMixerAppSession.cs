@@ -44,6 +44,9 @@ public sealed class TrackMixerAppSession : IDisposable
             Path.Combine(testHome, "track_metadata.json");
     }
 
+    public void SetTheme(string theme) =>
+        _extraEnvironment[UiTestBootstrap.ThemeEnvVar] = theme;
+
     public void Launch()
     {
         EnsureIsolatedTestStorage();

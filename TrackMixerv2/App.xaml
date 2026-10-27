@@ -21,8 +21,6 @@
             <x:String x:Key="AppTitleName">Track Mixer</x:String>
             <SolidColorBrush x:Key="WindowCaptionBackground">Transparent</SolidColorBrush>
             <SolidColorBrush x:Key="WindowCaptionBackgroundDisabled">Transparent</SolidColorBrush>
-            <SolidColorBrush x:Key="WindowCaptionForeground">White</SolidColorBrush>
-            <SolidColorBrush x:Key="WindowCaptionForegroundDisabled" Color="{ThemeResource SystemAltHighColor}"/>
             <x:Double x:Key="TabViewShadowDepth">0</x:Double>
         </ResourceDictionary>
     </Application.Resources>

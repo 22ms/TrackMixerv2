@@ -32,6 +32,9 @@ namespace TrackMixerv2
                 };
             }
 
+            if (Enum.TryParse(UiTestBootstrap.Theme, ignoreCase: true, out ApplicationTheme theme))
+                RequestedTheme = theme;
+
             this.InitializeComponent();
         }
         private void MainInstance_Activated(object sender, AppActivationArguments e)

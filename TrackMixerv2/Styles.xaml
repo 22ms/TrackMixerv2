@@ -526,6 +526,7 @@
                                                     HorizontalAlignment="Right"
                                                     VerticalAlignment="Center">
                                             <AppBarButton x:Name="TrackVolumeButton"
+                                                          AutomationProperties.AutomationId="TrackVolumeButton"
                                                           Style="{StaticResource AppBarButtonStyle}"
                                                           ToolTipService.ToolTip="Track volumes">
                                                 <AppBarButton.Resources>

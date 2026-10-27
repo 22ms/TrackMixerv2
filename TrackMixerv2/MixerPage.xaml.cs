@@ -1315,7 +1315,8 @@ namespace TrackMixerv2
                 KeybindListGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var dividerBrush = Application.Current.Resources["DividerStrokeColorDefaultBrush"] as Microsoft.UI.Xaml.Media.Brush;
-            var badgeBrush = Application.Current.Resources["ControlFillColorSecondaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
+            // ControlFillColorSecondary is near white in the light theme, so the badge vanished there.
+            var badgeBrush = Application.Current.Resources["ControlAltFillColorQuarternaryBrush"] as Microsoft.UI.Xaml.Media.Brush;
             for (int i = 0; i < items.Count; i++)
             {
                 (KeybindAction action, _) = items[i];
