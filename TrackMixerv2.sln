@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrackMixerv2.ScenarioTests"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrackMixerv2.UITests", "TrackMixerv2.UITests\TrackMixerv2.UITests.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrackMixerv2.Native", "TrackMixerv2.Native\TrackMixerv2.Native.csproj", "{0F8BCA98-FF66-448B-A203-6B39AFA71055}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrackMixerv2.NativeTests", "TrackMixerv2.NativeTests\TrackMixerv2.NativeTests.csproj", "{D54673CD-AEFE-498F-8A42-F35BACE7863B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -63,6 +67,30 @@ Global
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.ActiveCfg = Release|x64
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x64.Build.0 = Release|x64
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901}.Release|x86.ActiveCfg = Release|x64
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Debug|ARM64.ActiveCfg = Debug|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Debug|ARM64.Build.0 = Debug|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Debug|x64.Build.0 = Debug|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Debug|x86.Build.0 = Debug|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Release|ARM64.ActiveCfg = Release|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Release|ARM64.Build.0 = Release|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Release|x64.ActiveCfg = Release|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Release|x64.Build.0 = Release|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Release|x86.ActiveCfg = Release|Any CPU
+		{0F8BCA98-FF66-448B-A203-6B39AFA71055}.Release|x86.Build.0 = Release|Any CPU
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Debug|ARM64.ActiveCfg = Debug|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Debug|ARM64.Build.0 = Debug|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Debug|x64.ActiveCfg = Debug|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Debug|x64.Build.0 = Debug|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Debug|x86.ActiveCfg = Debug|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Debug|x86.Build.0 = Debug|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Release|ARM64.ActiveCfg = Release|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Release|ARM64.Build.0 = Release|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Release|x64.ActiveCfg = Release|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Release|x64.Build.0 = Release|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Release|x86.ActiveCfg = Release|x64
+		{D54673CD-AEFE-498F-8A42-F35BACE7863B}.Release|x86.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
