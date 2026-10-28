@@ -883,6 +883,7 @@ namespace TrackMixerv2
                 TickPlacement = TickPlacement.Inline,
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
                 Maximum = VolumeScale.MaxPosition,
                 Minimum = 0,
             };
